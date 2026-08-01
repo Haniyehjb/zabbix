@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="UTF-8">
+  <title>Zabbix Spatial Mapping - Complete Interactive System</title>
+  <!-- Libraries: Konva (Canvas) and Turf (Geometry) -->
+  <script src="https://unpkg.com/konva@9/konva.min.js"></script>
+  <script src="https://unpkg.com/@turf/turf/turf.min.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; display: flex; height: 100vh; overflow: hidden; background: #f0f2f5; }
+    
+    /* Left Panel: Controls */
+    #sidebar { width: 300px; background: #fff; border-right: 1px solid #ddd; padding: 15px; display: flex; flex-direction: column; gap: 15px; overflow-y: auto; box-shadow: 2px 0 5px rgba(0,0,0,0.05); z-index: 10; }
+    .section-title { font-size: 14px; font-weight: bold; color: #333; margin-bottom: 8px; border-bottom: 2px solid #007bff; padding-bottom: 4px; }
+    
+    /* Sensor Items */
+    .sensor-item { border: 1px solid #eee; border-radius: 6px; padding: 8px 12px; margin-bottom: 6px; cursor: grab; background: #fff; display: flex; align-items: center; transition: background 0.2s; }
+    .sensor-item:hover { background: #f8f9fa; border-color: #ccc; }
+    .sensor-item img { width: 22px; height: 22px; margin-right: 10px; pointer-events: none; }
+    .sensor-item span { font-size: 12px; font-weight: 600; color: #444; pointer-events: none; }
+
+    /* Bulk Config UI */
+    .form-group { margin-bottom: 8px; }
+    .form-group label { display: block; font-size: 11px; font-weight: 600; color: #666; margin-bottom: 4px; }
+    .form-control { width: 100%; padding: 6px 8px; font-size: 12px; border: 1px solid #ccc; border-radius: 4px; }
+    .checkbox-group { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; font-size: 11px; }
+
+    .btn { background: #007bff; color: white; border: none; padding: 8px 12px; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 12px; width: 100%; transition: background 0.2s; }
+    .btn:hover { background: #0056b3; }
+    .btn-danger { background: #dc3545; }
+    .btn-danger:hover { background: #bd2130; }
+
+    /* Center Content */
+    #main-content { flex: 1; display: flex; flex-direction: column; position: relative; }
+    #stage-container { flex: 1; background: #fcfcfc; }
+    #status-bar { position: absolute; top: 10px; right: 10px; background: rgba(255, 255, 255, 0.95); padding: 8px 12px; border-radius: 4px; font-size: 12px; font-weight: 600; box-shadow: 0 2px 5px rgba(0,0,0,0.1); z-index: 5; }
+    .status-idle { color: #555; }
+    .status-valid { color: #2e7d32; border-left: 4px solid #2e7d32; }
+    .status-error { color: #c62828; border-left: 4px solid #c62828; }
+
+    /* Bottom Panel: Live Inventory Table */
+    #inventory-panel { height: 180px; background: #fff; border-top: 1px solid #ddd; padding: 10px 15px; overflow-y: auto; }
+    #inventory-table { width: 100%; border-collapse: collapse; font-size: 11px; text-align: left; }
+    #inventory-table th { background: #f1f3f5; padding: 6px; border-bottom: 1px solid #ccc; color: #444; }
+    #inventory-table td { padding: 6px; border-bottom: 1px solid #eee; }
+    .btn-sm { padding: 2px 6px; font-size: 10px; width: auto; }
+  </style>
+</head>
+<body>
+
+  <!-- Left Sidebar Controls -->
+  <div id="sidebar">
+    
+    <!-- 1. Sensor Library -->
+    <div>
+      <div class="section-title">1. Drag & Drop Sensors</div>
+      <div class="sensor-item" draggable="true" data-type="temperature">
+        <img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJibGFjayIgc3Ryb2tlLXdpZHRoPSIyIj48cGF0aCBkPSJNNCAxMWw4IDhNNCAxMWwxNiAxNk00IDExLTggOE00IDExbDE2LTE2TSA5IDE4IEMgOSAxNCw0IDEyLDQgMTIiLz48Y2lyY2xlIGN4PSIxMiIgY3k9IjEyIiByPSIyIi8+PC9zdmc+">
+        <span>Temperature</span>
+      </div>
+      <div class="sensor-item" draggable="true" data-type="humidity">
+        <img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJibGFjayIgc3Ryb2tlLXdpZHRoPSIyIj48cGF0aCBkPSJNNCAxMWw4IDhNNCAxMWwxNiAxNk00IDExLTggOE00IDExbDE2LTE2TSA5IDE4IEMgOSAxNCw0IDEyLDQgMTIiLz48Y2lyY2xlIGN4PSI4IiBjeT0iMTAiIHI9IjIiLz48Y2lyY2xlIGN4PSIxNiIgY3k9IjEwIiByPSIyIi8+PC9zdmc+">
+        <span>Humidity</span>
+      </div>
+      <div class="sensor-item" draggable="true" data-type="voltage">
+        <img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJibGFjayIgc3Ryb2tlLXdpZHRoPSIyIj48cGF0aCBkPSJNNCAxMWw4IDhNNCAxMWwxNiAxNk00IDExLTggOE00IDExbDE2LTE2TSA5IDE4IEMgOSAxNCw0IDEyLDQgMTIiLz48cGF0aCBkPSJNMTMgNWwtNSA1aDZsLTUgNSIvPjwvc3ZnPg==">
+        <span>Voltage</span>
+      </div>
+    </div>
+
+    <!-- 2. User-Defined Bulk Rule Config -->
+    <div>
+      <div class="section-title">2. Default Bulk Rules</div>
+      <div class="form-group">
+        <label for="bulk-type">Default Sensor Type:</label>
+        <select id="bulk-type" class="form-control">
+          <option value="temperature">Temperature</option>
+          <option value="humidity">Humidity</option>
+          <option value="voltage">Voltage</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Placement Corners:</label>
+        <div class="checkbox-group">
+          <label><input type="checkbox" class="bulk-corner" value="top-left" checked> Top-Left</label>
+          <label><input type="checkbox" class="bulk-corner" value="top-right" checked> Top-Right</label>
+          <label><input type="checkbox" class="bulk-corner" value="bottom-left"> Bottom-Left</label>
+          <label><input type="checkbox" class="bulk-corner" value="bottom-right"> Bottom-Right</label>
+        </div>
+      </div>
+      <button id="apply-bulk-btn" class="btn">Apply Rule To All Rooms</button>
+    </div>
+
+    <!-- 3. Room Management (Add / Delete Rooms) -->
+    <div>
+      <div class="section-title">3. Add New Room</div>
+      <div class="form-group"><input type="text" id="room-name" class="form-control" placeholder="Room Name (e.g. Room 103)"></div>
+      <div style="display: flex; gap: 5px;" class="form-group">
+        <input type="number" id="room-x" class="form-control" placeholder="X" value="550">
+        <input type="number" id="room-y" class="form-control" placeholder="Y" value="50">
+      </div>
+      <div style="display: flex; gap: 5px;" class="form-group">
+        <input type="number" id="room-w" class="form-control" placeholder="Width" value="200">
+        <input type="number" id="room-h" class="form-control" placeholder="Height" value="150">
+      </div>
+      <button id="add-room-btn" class="btn">Create Room</button>
+    </div>
+
+  </div>
+
+  <!-- Main Canvas and Inventory Area -->
+  <div id="main-content">
+    <div id="stage-container"></div>
+    <div id="status-bar" class="status-idle">Status: Ready. Selected sensors can be deleted with [Delete] key.</div>
+
+    <!-- Live Sensor Inventory Table -->
+    <div id="inventory-panel">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+        <strong style="font-size: 12px; color: #333;">Live Sensor Inventory & Spatial Coordinates (Zabbix Data Source)</strong>
+        <button id="export-json-btn" class="btn btn-sm" style="background: #28a745;">Console Export JSON</button>
+      </div>
+      <table id="inventory-table">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Room / Location</th>
+            <th>Sensor Type</th>
+            <th>Coordinates (X, Y)</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="inventory-body">
+          <!-- Dynamic Rows -->
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    // --- 1. System Configuration & State ---
+    const CONFIG = {
+      canvasWidth: 850,
+      canvasHeight: 450,
+      wallThickness: 2,
+      placementOffset: 25
+    };
+
+    // Dynamic Map Data Structure
+    let mapRooms = {
+      'Room 101': { coords: [[50, 50], [250, 50], [250, 200], [50, 200], [50, 50]], type: 'room', fill: '#e3f2fd' },
+      'Room 102': { coords: [[270, 50], [470, 50], [470, 200], [270, 200], [270, 50]], type: 'room', fill: '#e3f2fd' },
+      'Corridor A': { coords: [[50, 200], [750, 200], [750, 250], [50, 250], [50, 200]], type: 'corridor', fill: '#fff' },
+      'Room 140': { coords: [[270, 250], [470, 250], [470, 400], [270, 400], [270, 250]], type: 'room', fill: '#e3f2fd' },
+      'Map Boundary': { coords: [[0, 0], [CONFIG.canvasWidth, 0], [CONFIG.canvasWidth, CONFIG.canvasHeight], [0, CONFIG.canvasHeight], [0, 0]], type: 'boundary', fill: '#fcfcfc' }
+    };
+
+    let selectedSensorGroup = null;
+
+    // --- 2. Initialize Konva Scene ---
+    const stage = new Konva.Stage({
+      container: 'stage-container',
+      width: CONFIG.canvasWidth,
+      height: CONFIG.canvasHeight
+    });
+
+    const mapLayer = new Konva.Layer();
+    const sensorLayer = new Konva.Layer();
+    stage.add(mapLayer);
+    stage.add(sensorLayer);
+
+    // --- 3. Render Map and Rooms ---
+    function renderMap() {
+      mapLayer.destroyChildren();
+
+      Object.keys(mapRooms).forEach(name => {
+        const room = mapRooms[name];
+        if (room.type === 'boundary') return;
+
+        // Render Room Polygon
+        const poly = new Konva.Line({
+          points: room.coords.flatMap(p => p),
+          fill: room.fill,
+          stroke: '#444',
+          strokeWidth: CONFIG.wallThickness,
+          closed: true,
+          opacity: room.type === 'corridor' ? 0.3 : 1
+        });
+        mapLayer.add(poly);
+
+        // Render Labels & Delete Buttons for Rooms
+        if (room.type === 'room') {
+          const labelX = room.coords[0][0] + 10;
+          const labelY = room.coords[0][1] + 10;
+
+          const text = new Konva.Text({
+            x: labelX,
+            y: labelY,
+            text: name,
+            fontSize: 12,
+            fontStyle: 'bold',
+            fill: '#333'
+          });
+          mapLayer.add(text);
+        }
+      });
+      mapLayer.draw();
+    }
+
+    // --- 4. Spatial Validation Logic (Turf.js) ---
+    function validateLocation(x, y) {
+      const point = turf.point([x, y]);
+
+      // Map Boundary Check
+      const mapPoly = turf.polygon([mapRooms['Map Boundary'].coords]);
+      if (!turf.booleanPointInPolygon(point, mapPoly)) {
+        updateStatus('error', 'Error: Sensor outside map boundary!');
+        return false;
+      }
+
+      let locationValid = false;
+      let targetRoomId = null;
+
+      for (const [name, room] of Object.entries(mapRooms)) {
+        if (room.type === 'boundary') continue;
+
+        const roomPoly = turf.polygon([room.coords]);
+        if (turf.booleanPointInPolygon(point, roomPoly)) {
+          if (room.type === 'corridor') {
+            updateStatus('error', 'Error: Cannot place sensors in corridors!');
+            return false; // Direct Rejection
+          }
+          if (room.type === 'room') {
+            locationValid = true;
+            targetRoomId = name;
+            break;
+          }
+        }
+      }
+
+      if (!locationValid) {
+        updateStatus('error', 'Error: Point not inside a valid room!');
+        return false;
+      }
+
+      updateStatus('valid', `Valid location inside ${targetRoomId}`);
+      return { room: targetRoomId };
+    }
+
+    function updateStatus(type, message) {
+      const bar = document.getElementById('status-bar');
+      bar.textContent = `Status: ${message}`;
+      bar.className = `status-${type}`;
+    }
+
+    // --- 5. Custom Vector Icons Rendering ---
+    const SENSOR_ICONS = {
+      base: () => new Konva.RegularPolygon({ sides: 6, radius: 10, fill: 'white', stroke: 'black', strokeWidth: 1.5, y: -2 }),
+      stem: () => new Konva.Line({ points: [0, -2, 0, -22], stroke: 'black', strokeWidth: 1.5, lineCap: 'round' }),
+
+      temperature: () => {
+        const g = new Konva.Group();
+        g.add(SENSOR_ICONS.stem());
+        g.add(SENSOR_ICONS.base());
+        g.add(new Konva.Line({ points: [-5, -2, 5, -2], stroke: 'black', strokeWidth: 1.5 }));
+        g.add(new Konva.Line({ points: [0, -7, 0, 3], stroke: 'black', strokeWidth: 1.5 }));
+        return g;
+      },
+      humidity: () => {
+        const g = new Konva.Group();
+        g.add(SENSOR_ICONS.stem());
+        g.add(SENSOR_ICONS.base());
+        g.add(new Konva.Circle({ cx: -4, cy: -2, radius: 2, fill: 'black' }));
+        g.add(new Konva.Circle({ cx: 4, cy: -2, radius: 2, fill: 'black' }));
+        return g;
+      },
+      voltage: () => {
+        const g = new Konva.Group();
+        g.add(SENSOR_ICONS.base());
+        g.add(new Konva.Line({ points: [1, -7, -2, -2, 2, -2, -1, 3], stroke: 'black', strokeWidth: 1.5 }));
+        return g;
+      }
+    };
+
+    // --- 6. Sensor Creation & Selection Management ---
+    function createSensor(x, y, type, targetRoom) {
+      const sensorId = `sensor_${Math.floor(Math.random() * 10000)}`;
+      
+      const group = new Konva.Group({
+        x: x,
+        y: y,
+        draggable: true,
+        id: sensorId
+      });
+
+      const icon = SENSOR_ICONS[type] ? SENSOR_ICONS[type]() : SENSOR_ICONS.temperature();
+      group.add(icon);
+
+      // Selection Highlight Circle
+      const highlight = new Konva.Circle({
+        radius: 14,
+        stroke: '#007bff',
+        strokeWidth: 2,
+        dash: [4, 4],
+        visible: false,
+        name: 'highlight'
+      });
+      group.add(highlight);
+
+      group.setAttrs({
+        zabbix_room: targetRoom,
+        zabbix_type: type,
+        lastValidPos: { x: x, y: y }
+      });
+
+      // Events
+      group.on('click tap', function(e) {
+        e.cancelBubble = true;
+        selectSensor(group);
+      });
+
+      group.on('dragmove', function() {
+        validateLocation(this.x(), this.y());
+      });
+
+      group.on('dragend', function() {
+        const validation = validateLocation(this.x(), this.y());
+        if (validation) {
+          this.setAttrs({
+            zabbix_room: validation.room,
+            lastValidPos: { x: this.x(), y: this.y() }
+          });
+        } else {
+          const lastPos = this.getAttr('lastValidPos');
+          this.to({ x: lastPos.x, y: lastPos.y, duration: 0.2 });
+          validateLocation(lastPos.x, lastPos.y);
+        }
+        updateInventoryTable();
+      });
+
+      return group;
+    }
+
+    function selectSensor(group) {
+      // Clear previous selection
+      sensorLayer.find('.highlight').forEach(h => h.visible(false));
+      
+      if (group) {
+        selectedSensorGroup = group;
+        const hl = group.findOne('.highlight');
+        if (hl) hl.visible(true);
+        updateStatus('idle', `Selected Sensor ID: ${group.id()} in ${group.getAttr('zabbix_room')}. Press [Delete] to remove.`);
+      } else {
+        selectedSensorGroup = null;
+      }
+      sensorLayer.draw();
+    }
+
+    function deleteSensor(sensorId) {
+      const sensor = sensorLayer.findOne(`#${sensorId}`);
+      if (sensor) {
+        sensor.destroy();
+        selectedSensorGroup = null;
+        sensorLayer.draw();
+        updateInventoryTable();
+        updateStatus('idle', `Sensor ${sensorId} deleted.`);
+      }
+    }
+
+    // Global KeyListener for Delete
+    window.addEventListener('keydown', (e) => {
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedSensorGroup) {
+        deleteSensor(selectedSensorGroup.id());
+      }
+    });
+
+    stage.on('click', () => selectSensor(null));
+
+    // --- 7. Drag & Drop HTML Library to Canvas ---
+    const sidebar = document.getElementById('sidebar');
+    const stageContainer = stage.container();
+    let currentDragType = null;
+
+    sidebar.addEventListener('dragstart', (e) => {
+      const item = e.target.closest('.sensor-item');
+      if (item) currentDragType = item.getAttribute('data-type');
+    });
+
+    stageContainer.addEventListener('dragover', (e) => e.preventDefault());
+
+    stageContainer.addEventListener('drop', (e) => {
+      e.preventDefault();
+      if (!currentDragType) return;
+
+      const stageBox = stageContainer.getBoundingClientRect();
+      const dropPoint = { x: e.clientX - stageBox.left, y: e.clientY - stageBox.top };
+
+      const validation = validateLocation(dropPoint.x, dropPoint.y);
+      if (validation) {
+        const newSensor = createSensor(dropPoint.x, dropPoint.y, currentDragType, validation.room);
+        sensorLayer.add(newSensor);
+        sensorLayer.draw();
+        updateInventoryTable();
+      }
+      currentDragType = null;
+    });
+
+    // --- 8. User-Defined Bulk Placement ---
+    document.getElementById('apply-bulk-btn').addEventListener('click', () => {
+      const selectedType = document.getElementById('bulk-type').value;
+      const selectedCorners = Array.from(document.querySelectorAll('.bulk-corner:checked')).map(cb => cb.value);
+
+      if (selectedCorners.length === 0) {
+        alert('Please select at least one corner for bulk placement!');
+        return;
+      }
+
+      Object.keys(mapRooms).forEach(name => {
+        const room = mapRooms[name];
+        if (room.type !== 'room') return;
+
+        const bbox = turf.bbox(turf.polygon([room.coords]));
+        const offset = CONFIG.placementOffset;
+
+        const corners = {
+          'top-left': { x: bbox[0] + offset, y: bbox[1] + offset },
+          'top-right': { x: bbox[2] - offset, y: bbox[1] + offset },
+          'bottom-left': { x: bbox[0] + offset, y: bbox[3] - offset },
+          'bottom-right': { x: bbox[2] - offset, y: bbox[3] - offset }
+        };
+
+        selectedCorners.forEach(cornerKey => {
+          const pos = corners[cornerKey];
+          const sensor = createSensor(pos.x, pos.y, selectedType, name);
+          sensorLayer.add(sensor);
+        });
+      });
+
+      sensorLayer.draw();
+      updateInventoryTable();
+      updateStatus('idle', `Applied default ${selectedType} sensors to all rooms.`);
+    });
+
+    // --- 9. Dynamic Room Creation ---
+    document.getElementById('add-room-btn').addEventListener('click', () => {
+      const name = document.getElementById('room-name').value.trim();
+      const x = parseInt(document.getElementById('room-x').value);
+      const y = parseInt(document.getElementById('room-y').value);
+      const w = parseInt(document.getElementById('room-w').value);
+      const h = parseInt(document.getElementById('room-h').value);
+
+      if (!name || isNaN(x) || isNaN(y) || isNaN(w) || isNaN(h)) {
+        alert('Please fill all room fields correctly.');
+        return;
+      }
+
+      // Construct Polygon Coordinates
+      mapRooms[name] = {
+        coords: [[x, y], [x + w, y], [x + w, y + h], [x, y + h], [x, y]],
+        type: 'room',
+        fill: '#e3f2fd'
+      };
+
+      renderMap();
+      updateStatus('idle', `Created new room: ${name}`);
+    });
+
+    // --- 10. Live Inventory & Export Table ---
+    function updateInventoryTable() {
+      const tbody = document.getElementById('inventory-body');
+      tbody.innerHTML = '';
+
+      const sensors = sensorLayer.getChildren();
+      sensors.forEach(sensor => {
+        const id = sensor.id();
+        const room = sensor.getAttr('zabbix_room');
+        const type = sensor.getAttr('zabbix_type');
+        const x = Math.round(sensor.x());
+        const y = Math.round(sensor.y());
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td><strong>${id}</strong></td>
+          <td>${room}</td>
+          <td>${type.toUpperCase()}</td>
+          <td>X: ${x}, Y: ${y}</td>
+          <td><button class="btn btn-danger btn-sm" onclick="deleteSensor('${id}')">Delete</button></td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    document.getElementById('export-json-btn').addEventListener('click', () => {
+      const exportData = sensorLayer.getChildren().map(s => ({
+        id: s.id(),
+        room: s.getAttr('zabbix_room'),
+        type: s.getAttr('zabbix_type'),
+        coordinates: { x: Math.round(s.x()), y: Math.round(s.y()) }
+      }));
+      console.log('Zabbix Map Export Data:', JSON.stringify(exportData, null, 2));
+      alert('Data exported to Browser Console (F12)!');
+    });
+
+    // Initial Render
+    renderMap();
+  </script>
+</body>
+</html>
