@@ -104,18 +104,34 @@
         .status-badge { padding: 6px 12px; border-radius: 6px; font-weight: bold; font-size: 0.9rem; }
         .status-ok { background: #50fa7b; color: #282a36; }
         .status-alarm { background: #ff5555; color: white; }
-        .close-btn { 
-            margin-top: 20px; 
-            padding: 10px 20px; 
-            background: #6272a4; 
-            color: white; 
+        
+        .modal-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .modal-btn { 
+            flex: 1;
+            padding: 10px; 
             border: none; 
             border-radius: 6px; 
             cursor: pointer; 
             font-weight: bold;
             transition: background 0.2s;
         }
+        
+        .close-btn { 
+            background: #6272a4; 
+            color: white; 
+        }
         .close-btn:hover { background: #bd93f9; }
+
+        .delete-btn {
+            background: #ff5555;
+            color: white;
+        }
+        .delete-btn:hover { background: #ff79c6; }
 
         @keyframes pulse {
             0% { transform: scale(1); }
@@ -181,7 +197,10 @@
         <h2 id="sensorName">Server Room Temp Sensor</h2>
         <div class="temp-display" id="tempValue">-- °C</div>
         <div>Status: <span id="statusBadge" class="status-badge status-ok">NORMAL</span></div>
-        <button class="close-btn" onclick="closeModal()">Close</button>
+        <div class="modal-buttons">
+            <button class="modal-btn delete-btn" onclick="deleteCurrentSensor()">🗑️ Delete</button>
+            <button class="modal-btn close-btn" onclick="closeModal()">Close</button>
+        </div>
     </div>
 
    <script>
@@ -195,6 +214,7 @@
     let updateInterval = null;
     let sensorCount = 1;
     let isPlacementMode = false;
+    let activeSelectedSensor = null; // Currently opened sensor mesh
 
     // ==========================================
     // 2. THREE.JS SCENE SETUP
@@ -221,7 +241,7 @@
     dirLight.position.set(10, 20, 10);
     scene.add(dirLight);
 
-    const clickableSensors = [];
+    let clickableSensors = [];
     const roomSurfaces = []; // Surfaces where sensors can be placed
 
     // ==========================================
@@ -357,6 +377,7 @@
         if (intersects.length > 0) {
             const clickedSensor = intersects[0].object;
             if (clickedSensor.userData.isSensor) {
+                activeSelectedSensor = clickedSensor; // Store reference to clicked sensor
                 openSensorModal(clickedSensor.userData.name, clickedSensor.userData.itemKey);
             }
         }
@@ -436,6 +457,25 @@
     function closeModal() {
         document.getElementById("sensorModal").style.display = "none";
         if (updateInterval) clearInterval(updateInterval);
+        activeSelectedSensor = null;
+    }
+
+    // Deletes the currently selected sensor from the scene
+    function deleteCurrentSensor() {
+        if (activeSelectedSensor) {
+            // Remove mesh from Three.js scene
+            scene.remove(activeSelectedSensor);
+            
+            // Clean up mesh geometry and material
+            if (activeSelectedSensor.geometry) activeSelectedSensor.geometry.dispose();
+            if (activeSelectedSensor.material) activeSelectedSensor.material.dispose();
+
+            // Filter sensor out of clickable array
+            clickableSensors = clickableSensors.filter(sensor => sensor !== activeSelectedSensor);
+
+            // Close modal & reset state
+            closeModal();
+        }
     }
 </script>
 </body>
