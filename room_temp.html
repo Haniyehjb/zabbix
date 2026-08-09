@@ -31,6 +31,49 @@
             display: block;
         }
 
+        /* Control Panel for Adding Sensors */
+        .control-panel {
+            position: absolute;
+            top: 15px;
+            right: 20px;
+            background: rgba(33, 34, 44, 0.9);
+            padding: 15px 20px;
+            border-radius: 10px;
+            border: 1px solid #6272a4;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            z-index: 10;
+            width: 260px;
+        }
+        .control-panel h3 { margin: 0 0 10px 0; color: #8be9fd; font-size: 1.1rem; }
+        .form-group { margin-bottom: 8px; text-align: left; }
+        .form-group label { display: block; font-size: 0.75rem; color: #f8f8f2; margin-bottom: 2px; }
+        .form-group input { 
+            width: 100%; 
+            padding: 6px; 
+            background: #282a36; 
+            border: 1px solid #44475a; 
+            color: #f8f8f2; 
+            border-radius: 4px; 
+            box-sizing: border-box;
+            font-size: 0.85rem;
+        }
+        .coord-group { display: flex; gap: 5px; }
+        .coord-group input { width: 33%; }
+
+        .btn-add {
+            width: 100%;
+            margin-top: 10px;
+            padding: 8px;
+            background: #50fa7b;
+            color: #282a36;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background 0.2s;
+        }
+        .btn-add:hover { background: #5af78e; }
+
         /* Sensor Pop-up Modal */
         .modal {
             display: none;
@@ -101,6 +144,30 @@
         <p>Interactive Sensor Monitoring connected to Zabbix</p>
     </header>
 
+    <!-- Add Sensor UI Panel -->
+    <div class="control-panel">
+        <h3>➕ Add New Sensor</h3>
+        <form id="addSensorForm">
+            <div class="form-group">
+                <label for="sensorTitle">Sensor Display Name</label>
+                <input type="text" id="sensorTitle" value="Server Rack Sensor" required>
+            </div>
+            <div class="form-group">
+                <label for="itemKey">Zabbix Item Key</label>
+                <input type="text" id="itemKey" value="room.temp" required>
+            </div>
+            <div class="form-group">
+                <label>3D Coordinates (X, Y, Z)</label>
+                <div class="coord-group">
+                    <input type="number" id="posX" step="0.1" value="0.0" required>
+                    <input type="number" id="posY" step="0.1" value="1.5" required>
+                    <input type="number" id="posZ" step="0.1" value="0.0" required>
+                </div>
+            </div>
+            <button type="submit" class="btn-add">Add Sensor to Room</button>
+        </form>
+    </div>
+
     <div class="hint">🖱️ Left Click + Drag to rotate | Scroll to Zoom | Click a sensor to view live data</div>
 
     <!-- 3D Canvas -->
@@ -123,6 +190,7 @@
     const HOST_NAME = "Server Room"; // Default host in Zabbix
 
     let updateInterval = null;
+    let sensorCount = 1;
 
     // ==========================================
     // 2. THREE.JS SCENE SETUP
@@ -152,7 +220,7 @@
     const clickableObjects = [];
 
     // ==========================================
-    // 3. LOAD MODEL & PLACE SENSORS
+    // 3. LOAD MODEL & PLACE INITIAL SENSORS
     // ==========================================
     const loader = new THREE.GLTFLoader();
     
@@ -160,10 +228,8 @@
         const roomModel = gltf.scene;
         scene.add(roomModel);
         
-        // Add sensors onto specific coordinates inside your custom GLB model
-        // Syntax: create3DSensorNode(X, Y, Z, "Display Title", "zabbix.item.key")
-        create3DSensorNode(0, 2, 1.1, "Server Rack Temp", "room.temp");
-        create3DSensorNode(-2, 1.5, -1, "Room Ambient Temp", "room.ambient_temp"); // <--- NEW SENSOR ADDED HERE!
+        // Initial default sensor
+        create3DSensorNode(0, 2, 1.1, "Server Rack Temp #1", "room.temp");
 
     }, undefined, function (error) {
         console.log("No custom GLB found, loading fallback room...");
@@ -183,12 +249,8 @@
         rack.position.set(0, 1.5, 0);
         scene.add(rack);
 
-        // --- SENSORS PLACEMENT ---
-        // 1. Existing Server Rack Sensor
-        create3DSensorNode(0, 2, 1.1, "Server Rack Temp Sensor", "room.temp");
-        
-        // 2. NEW ROOM SENSOR (Positioned elsewhere in space)
-        create3DSensorNode(-3, 1.5, -2, "Room Wall Temp Sensor", "room.ambient_temp"); 
+        // --- INITIAL SENSOR PLACEMENT ---
+        create3DSensorNode(0, 2, 1.1, "Server Rack Temp #1", "room.temp");
     }
 
     // Helper to spawn interactive 3D Sensor spheres
@@ -214,7 +276,29 @@
     }
 
     // ==========================================
-    // 4. MOUSE CLICK / RAYCASTING DETECTION
+    // 4. MANUAL SENSOR FORM HANDLING
+    // ==========================================
+    document.getElementById('addSensorForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        const title = document.getElementById('sensorTitle').value;
+        const key = document.getElementById('itemKey').value;
+        const x = parseFloat(document.getElementById('posX').value);
+        const y = parseFloat(document.getElementById('posY').value);
+        const z = parseFloat(document.getElementById('posZ').value);
+
+        // Create 3D sphere node in scene
+        create3DSensorNode(x, y, z, title, key);
+
+        // Update default form inputs to make consecutive additions easy
+        sensorCount++;
+        document.getElementById('sensorTitle').value = `Server Rack Sensor #${sensorCount}`;
+        document.getElementById('posX').value = (Math.random() * 6 - 3).toFixed(1);
+        document.getElementById('posZ').value = (Math.random() * 6 - 3).toFixed(1);
+    });
+
+    // ==========================================
+    // 5. MOUSE CLICK / RAYCASTING DETECTION
     // ==========================================
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
@@ -222,6 +306,9 @@
     window.addEventListener('click', onPointerClick);
 
     function onPointerClick(event) {
+        // Prevent click raycasting when clicking form controls
+        if (event.target.closest('.control-panel')) return;
+
         mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
         mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
 
@@ -231,7 +318,6 @@
         if (intersects.length > 0) {
             const clickedSensor = intersects[0].object;
             if (clickedSensor.userData.isSensor) {
-                // Pass both display title and item key to the dynamic pop-up
                 openSensorModal(clickedSensor.userData.name, clickedSensor.userData.itemKey);
             }
         }
@@ -251,7 +337,7 @@
     animate();
 
     // ==========================================
-    // 5. DYNAMIC ZABBIX FETCH & MODAL LOGIC
+    // 6. DYNAMIC ZABBIX FETCH & MODAL LOGIC
     // ==========================================
     async function fetchSensorData(itemKey) {
         try {
@@ -263,7 +349,7 @@
                     method: "item.get",
                     params: {
                         output: ["lastvalue", "units"],
-                        filter: { host: HOST_NAME, key_: itemKey } // Fetch using dynamic item key
+                        filter: { host: HOST_NAME, key_: itemKey }
                     },
                     auth: API_TOKEN,
                     id: 1
@@ -302,10 +388,8 @@
         document.getElementById("sensorName").innerText = name;
         document.getElementById("sensorModal").style.display = "block";
         
-        // Initial fetch call
         fetchSensorData(itemKey);
         
-        // Clear previous polling intervals if open, then start a new interval
         if (updateInterval) clearInterval(updateInterval);
         updateInterval = setInterval(() => fetchSensorData(itemKey), 3000);
     }
