@@ -30,6 +30,10 @@
             height: 100vh;
             display: block;
         }
+        
+        #canvas-container.placement-mode {
+            cursor: crosshair !important;
+        }
 
         /* Control Panel for Adding Sensors */
         .control-panel {
@@ -57,22 +61,25 @@
             box-sizing: border-box;
             font-size: 0.85rem;
         }
-        .coord-group { display: flex; gap: 5px; }
-        .coord-group input { width: 33%; }
 
         .btn-add {
             width: 100%;
             margin-top: 10px;
-            padding: 8px;
-            background: #50fa7b;
+            padding: 10px;
+            background: #bd93f9;
             color: #282a36;
             border: none;
             border-radius: 6px;
             cursor: pointer;
             font-weight: bold;
-            transition: background 0.2s;
+            transition: background 0.2s, transform 0.1s;
         }
-        .btn-add:hover { background: #5af78e; }
+        .btn-add:hover { background: #ff79c6; }
+        .btn-add.active {
+            background: #ff5555;
+            color: white;
+            animation: pulse 1.5s infinite;
+        }
 
         /* Sensor Pop-up Modal */
         .modal {
@@ -112,7 +119,7 @@
 
         @keyframes pulse {
             0% { transform: scale(1); }
-            50% { transform: scale(1.05); }
+            50% { transform: scale(1.03); }
             100% { transform: scale(1); }
         }
 
@@ -122,13 +129,19 @@
             bottom: 20px;
             left: 50%;
             transform: translateX(-50%);
-            background: rgba(40, 42, 54, 0.8);
+            background: rgba(40, 42, 54, 0.85);
             padding: 8px 16px;
             border-radius: 20px;
             font-size: 0.85rem;
             color: #f8f8f2;
             pointer-events: none;
             border: 1px solid #44475a;
+            transition: all 0.3s ease;
+        }
+        .hint.highlight {
+            background: rgba(255, 121, 198, 0.9);
+            color: #282a36;
+            font-weight: bold;
         }
     </style>
 
@@ -146,29 +159,19 @@
 
     <!-- Add Sensor UI Panel -->
     <div class="control-panel">
-        <h3>➕ Add New Sensor</h3>
-        <form id="addSensorForm">
-            <div class="form-group">
-                <label for="sensorTitle">Sensor Display Name</label>
-                <input type="text" id="sensorTitle" value="Server Rack Sensor" required>
-            </div>
-            <div class="form-group">
-                <label for="itemKey">Zabbix Item Key</label>
-                <input type="text" id="itemKey" value="room.temp" required>
-            </div>
-            <div class="form-group">
-                <label>3D Coordinates (X, Y, Z)</label>
-                <div class="coord-group">
-                    <input type="number" id="posX" step="0.1" value="0.0" required>
-                    <input type="number" id="posY" step="0.1" value="1.5" required>
-                    <input type="number" id="posZ" step="0.1" value="0.0" required>
-                </div>
-            </div>
-            <button type="submit" class="btn-add">Add Sensor to Room</button>
-        </form>
+        <h3>📍 Add Sensor</h3>
+        <div class="form-group">
+            <label for="sensorTitle">Sensor Display Name</label>
+            <input type="text" id="sensorTitle" value="Server Rack Sensor #1">
+        </div>
+        <div class="form-group">
+            <label for="itemKey">Zabbix Item Key</label>
+            <input type="text" id="itemKey" value="room.temp">
+        </div>
+        <button id="togglePlaceBtn" class="btn-add">📍 Place Sensor (Click Scene)</button>
     </div>
 
-    <div class="hint">🖱️ Left Click + Drag to rotate | Scroll to Zoom | Click a sensor to view live data</div>
+    <div id="hintBox" class="hint">🖱️ Left Click + Drag to rotate | Scroll to Zoom | Click a sensor to view live data</div>
 
     <!-- 3D Canvas -->
     <div id="canvas-container"></div>
@@ -191,6 +194,7 @@
 
     let updateInterval = null;
     let sensorCount = 1;
+    let isPlacementMode = false;
 
     // ==========================================
     // 2. THREE.JS SCENE SETUP
@@ -217,10 +221,11 @@
     dirLight.position.set(10, 20, 10);
     scene.add(dirLight);
 
-    const clickableObjects = [];
+    const clickableSensors = [];
+    const roomSurfaces = []; // Surfaces where sensors can be placed
 
     // ==========================================
-    // 3. LOAD MODEL & PLACE INITIAL SENSORS
+    // 3. LOAD MODEL & SURFACES
     // ==========================================
     const loader = new THREE.GLTFLoader();
     
@@ -228,7 +233,12 @@
         const roomModel = gltf.scene;
         scene.add(roomModel);
         
-        // Initial default sensor
+        // Add room surfaces to intersect with
+        roomModel.traverse((child) => {
+            if (child.isMesh) roomSurfaces.push(child);
+        });
+
+        // Add initial sensor
         create3DSensorNode(0, 2, 1.1, "Server Rack Temp #1", "room.temp");
 
     }, undefined, function (error) {
@@ -242,12 +252,14 @@
         const floor = new THREE.Mesh(floorGeo, floorMat);
         floor.rotation.x = Math.PI / 2;
         scene.add(floor);
+        roomSurfaces.push(floor);
 
         const boxGeo = new THREE.BoxGeometry(2, 3, 2);
         const boxMat = new THREE.MeshStandardMaterial({ color: 0x44475a });
         const rack = new THREE.Mesh(boxGeo, boxMat);
         rack.position.set(0, 1.5, 0);
         scene.add(rack);
+        roomSurfaces.push(rack);
 
         // --- INITIAL SENSOR PLACEMENT ---
         create3DSensorNode(0, 2, 1.1, "Server Rack Temp #1", "room.temp");
@@ -255,16 +267,15 @@
 
     // Helper to spawn interactive 3D Sensor spheres
     function create3DSensorNode(x, y, z, sensorName, zabbixItemKey) {
-        const sensorGeo = new THREE.SphereGeometry(0.25, 32, 32);
+        const sensorGeo = new THREE.SphereGeometry(0.2, 32, 32);
         const sensorMat = new THREE.MeshStandardMaterial({ 
-            color: 0x6272a4, 
-            emissive: 0x6272a4, 
-            emissiveIntensity: 0.5 
+            color: 0x50fa7b, 
+            emissive: 0x50fa7b, 
+            emissiveIntensity: 0.6 
         });
         const sensorMesh = new THREE.Mesh(sensorGeo, sensorMat);
         sensorMesh.position.set(x, y, z);
         
-        // Bind both the Display Name and the Zabbix Item Key to the mesh metadata
         sensorMesh.userData = { 
             name: sensorName, 
             itemKey: zabbixItemKey, 
@@ -272,30 +283,37 @@
         };
         
         scene.add(sensorMesh);
-        clickableObjects.push(sensorMesh);
+        clickableSensors.push(sensorMesh);
     }
 
     // ==========================================
-    // 4. MANUAL SENSOR FORM HANDLING
+    // 4. PLACEMENT MODE TOGGLE
     // ==========================================
-    document.getElementById('addSensorForm').addEventListener('submit', function(e) {
-        e.preventDefault();
+    const toggleBtn = document.getElementById('togglePlaceBtn');
+    const hintBox = document.getElementById('hintBox');
+
+    toggleBtn.addEventListener('click', () => {
+        isPlacementMode = !isPlacementMode;
         
-        const title = document.getElementById('sensorTitle').value;
-        const key = document.getElementById('itemKey').value;
-        const x = parseFloat(document.getElementById('posX').value);
-        const y = parseFloat(document.getElementById('posY').value);
-        const z = parseFloat(document.getElementById('posZ').value);
-
-        // Create 3D sphere node in scene
-        create3DSensorNode(x, y, z, title, key);
-
-        // Update default form inputs to make consecutive additions easy
-        sensorCount++;
-        document.getElementById('sensorTitle').value = `Server Rack Sensor #${sensorCount}`;
-        document.getElementById('posX').value = (Math.random() * 6 - 3).toFixed(1);
-        document.getElementById('posZ').value = (Math.random() * 6 - 3).toFixed(1);
+        if (isPlacementMode) {
+            toggleBtn.classList.add('active');
+            toggleBtn.innerText = '❌ Cancel Placement';
+            container.classList.add('placement-mode');
+            hintBox.innerText = '🎯 CLICK ANYWHERE ON THE ROOM OR RACK TO PLACE SENSOR';
+            hintBox.classList.add('highlight');
+        } else {
+            disablePlacementMode();
+        }
     });
+
+    function disablePlacementMode() {
+        isPlacementMode = false;
+        toggleBtn.classList.remove('active');
+        toggleBtn.innerText = '📍 Place Sensor (Click Scene)';
+        container.classList.remove('placement-mode');
+        hintBox.innerText = '🖱️ Left Click + Drag to rotate | Scroll to Zoom | Click a sensor to view live data';
+        hintBox.classList.remove('highlight');
+    }
 
     // ==========================================
     // 5. MOUSE CLICK / RAYCASTING DETECTION
@@ -306,15 +324,36 @@
     window.addEventListener('click', onPointerClick);
 
     function onPointerClick(event) {
-        // Prevent click raycasting when clicking form controls
-        if (event.target.closest('.control-panel')) return;
+        // Ignore clicks inside UI panels
+        if (event.target.closest('.control-panel') || event.target.closest('.modal')) return;
 
         mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
         mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
 
         raycaster.setFromCamera(mouse, camera);
-        const intersects = raycaster.intersectObjects(clickableObjects);
 
+        // MODE 1: PLACING A SENSOR ON A SURFACE
+        if (isPlacementMode) {
+            const intersects = raycaster.intersectObjects(roomSurfaces, true);
+            if (intersects.length > 0) {
+                const point = intersects[0].point;
+                const title = document.getElementById('sensorTitle').value;
+                const key = document.getElementById('itemKey').value;
+
+                // Create the sensor sphere right at click point
+                create3DSensorNode(point.x, point.y, point.z, title, key);
+
+                // Prepare name for next sensor
+                sensorCount++;
+                document.getElementById('sensorTitle').value = `Server Rack Sensor #${sensorCount}`;
+
+                disablePlacementMode();
+            }
+            return;
+        }
+
+        // MODE 2: CLICKING AN EXISTING SENSOR TO OPEN DATA
+        const intersects = raycaster.intersectObjects(clickableSensors);
         if (intersects.length > 0) {
             const clickedSensor = intersects[0].object;
             if (clickedSensor.userData.isSensor) {
