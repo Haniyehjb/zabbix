@@ -2,58 +2,36 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Room Monitoring 3D Dashboard</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Room Monitoring - Zabbix</title>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background-color: #1a1a24;
             color: white;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            min-height: 100vh;
             margin: 0;
+            overflow: hidden;
         }
 
-        h1 { margin-bottom: 30px; }
-
-        /* Mock Room Map / Container */
-        .room-container {
-            width: 500px;
-            height: 300px;
-            background: #282a36;
-            border: 2px solid #44475a;
-            border-radius: 12px;
-            position: relative;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-        }
-
-        /* Interactive Sensor Button (Can be placed over 3D model) */
-        .sensor-node {
+        /* Top Header */
+        header {
             position: absolute;
-            top: 40%;
-            left: 45%;
-            width: 70px;
-            height: 70px;
-            background: #6272a4;
-            border-radius: 50%;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            box-shadow: 0 0 15px rgba(98, 114, 164, 0.6);
-            border: 2px solid #f8f8f2;
+            top: 15px;
+            left: 20px;
+            z-index: 10;
+            pointer-events: none;
+        }
+        h1 { margin: 0; font-size: 1.5rem; color: #8be9fd; text-shadow: 0 0 10px rgba(139, 233, 253, 0.5); }
+        p { margin: 5px 0 0 0; font-size: 0.85rem; color: #6272a4; }
+
+        /* 3D Canvas Container */
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+            display: block;
         }
 
-        .sensor-node:hover {
-            transform: scale(1.15);
-            box-shadow: 0 0 25px rgba(255, 121, 198, 0.8);
-        }
-
-        /* Modal/Popup Box */
+        /* Sensor Pop-up Modal */
         .modal {
             display: none;
             position: fixed;
@@ -62,115 +40,280 @@
             transform: translate(-50%, -50%);
             background: #21222c;
             padding: 25px;
-            border-radius: 10px;
-            box-shadow: 0 0 20px rgba(0,0,0,0.8);
+            border-radius: 12px;
+            box-shadow: 0 0 30px rgba(0,0,0,0.8);
             border: 1px solid #6272a4;
             width: 320px;
             text-align: center;
+            z-index: 100;
         }
 
-        .modal h2 { margin-top: 0; color: #8be9fd; }
-        .temp-display { font-size: 3rem; font-weight: bold; margin: 15px 0; color: #50fa7b; }
+        .modal h2 { margin-top: 0; color: #8be9fd; font-size: 1.3rem; }
+        .temp-display { font-size: 3rem; font-weight: bold; margin: 15px 0; color: #50fa7b; transition: color 0.3s ease; }
         .temp-display.alarm { color: #ff5555; animation: pulse 1s infinite; }
-        .status-badge { padding: 5px 10px; border-radius: 5px; font-weight: bold; }
+        .status-badge { padding: 6px 12px; border-radius: 6px; font-weight: bold; font-size: 0.9rem; }
         .status-ok { background: #50fa7b; color: #282a36; }
         .status-alarm { background: #ff5555; color: white; }
-        .close-btn { margin-top: 20px; padding: 8px 16px; background: #6272a4; color: white; border: none; border-radius: 5px; cursor: pointer; }
+        .close-btn { 
+            margin-top: 20px; 
+            padding: 10px 20px; 
+            background: #6272a4; 
+            color: white; 
+            border: none; 
+            border-radius: 6px; 
+            cursor: pointer; 
+            font-weight: bold;
+            transition: background 0.2s;
+        }
+        .close-btn:hover { background: #bd93f9; }
 
         @keyframes pulse {
             0% { transform: scale(1); }
             50% { transform: scale(1.05); }
             100% { transform: scale(1); }
         }
+
+        /* Instruction Hint */
+        .hint {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(40, 42, 54, 0.8);
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            color: #f8f8f2;
+            pointer-events: none;
+            border: 1px solid #44475a;
+        }
     </style>
+
+    <!-- Load Three.js Engine and GLTF Loader directly via CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
 </head>
 <body>
 
-    <h1>Server Room Monitoring</h1>
+    <header>
+        <h1>Server Room 3D Digital Twin</h1>
+        <p>Interactive Sensor Monitoring connected to Zabbix</p>
+    </header>
 
-    <div class="room-container">
-        <!-- Interactive Sensor Pin -->
-        <div class="sensor-node" id="sensorPin" onclick="openSensorModal()">
-            <span>🌡️</span>
-            <small style="font-size: 10px;">Temp 1</small>
-        </div>
-    </div>
+    <div class="hint">🖱️ Left Click + Drag to rotate | Scroll to Zoom | Click a sensor to view live data</div>
+
+    <!-- 3D Canvas -->
+    <div id="canvas-container"></div>
 
     <!-- Sensor Details Popup Modal -->
     <div class="modal" id="sensorModal">
-        <h2 id="sensorName">Server Room Sensor</h2>
+        <h2 id="sensorName">Server Room Temp Sensor</h2>
         <div class="temp-display" id="tempValue">-- °C</div>
         <div>Status: <span id="statusBadge" class="status-badge status-ok">NORMAL</span></div>
         <button class="close-btn" onclick="closeModal()">Close</button>
     </div>
 
-    <script>
-        // --- ZABBIX CONFIGURATION ---
-        const ZABBIX_URL = "http://localhost:8080/zabbix/api_jsonrpc.php";
-        const API_TOKEN = ""; // <-- Put your copied API Token here!
-        const HOST_NAME = "Server Room";
-        const ITEM_KEY = "room.temp";
+   <script>
+    // ==========================================
+    // 1. ZABBIX API CONFIGURATION
+    // ==========================================
+    const ZABBIX_URL = "http://localhost:8080/zabbix/api_jsonrpc.php";
+    const API_TOKEN = ""; 
+    const HOST_NAME = "Server Room"; // Default host in Zabbix
 
-        let updateInterval = null;
+    let updateInterval = null;
 
-        async function fetchSensorData() {
-            try {
-                // 1. Fetch live Temperature item value
-                const response = await fetch(ZABBIX_URL, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json-rpc" },
-                    body: JSON.stringify({
-                        jsonrpc: "2.0",
-                        method: "item.get",
-                        params: {
-                            output: ["lastvalue", "units"],
-                            filter: { host: HOST_NAME, key_: ITEM_KEY }
-                        },
-                        auth: API_TOKEN,
-                        id: 1
-                    })
-                });
+    // ==========================================
+    // 2. THREE.JS SCENE SETUP
+    // ==========================================
+    const container = document.getElementById('canvas-container');
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x1a1a24);
 
-                const data = await response.json();
-                
-                if (data.result && data.result.length > 0) {
-                    const lastVal = parseFloat(data.result[0].lastvalue).toFixed(1);
-                    const units = data.result[0].units;
+    const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.set(5, 5, 8);
 
-                    const tempEl = document.getElementById("tempValue");
-                    const statusBadge = document.getElementById("statusBadge");
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = true;
+    container.appendChild(renderer.domElement);
 
-                    tempEl.innerText = `${lastVal} ${units}`;
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
 
-                    // Trigger visual alarm state if temp > 30°C
-                    if (lastVal > 30.0) {
-                        tempEl.classList.add("alarm");
-                        statusBadge.innerText = "ALARM: HIGH TEMP";
-                        statusBadge.className = "status-badge status-alarm";
-                        document.getElementById("sensorPin").style.background = "#ff5555";
-                    } else {
-                        tempEl.classList.remove("alarm");
-                        statusBadge.innerText = "NORMAL";
-                        statusBadge.className = "status-badge status-ok";
-                        document.getElementById("sensorPin").style.background = "#6272a4";
-                    }
-                }
-            } catch (err) {
-                console.error("Failed to connect to Zabbix API:", err);
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+    scene.add(ambientLight);
+
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    dirLight.position.set(10, 20, 10);
+    scene.add(dirLight);
+
+    const clickableObjects = [];
+
+    // ==========================================
+    // 3. LOAD MODEL & PLACE SENSORS
+    // ==========================================
+    const loader = new THREE.GLTFLoader();
+    
+    loader.load('room.glb', function (gltf) {
+        const roomModel = gltf.scene;
+        scene.add(roomModel);
+        
+        // Add sensors onto specific coordinates inside your custom GLB model
+        // Syntax: create3DSensorNode(X, Y, Z, "Display Title", "zabbix.item.key")
+        create3DSensorNode(0, 2, 1.1, "Server Rack Temp", "room.temp");
+        create3DSensorNode(-2, 1.5, -1, "Room Ambient Temp", "room.ambient_temp"); // <--- NEW SENSOR ADDED HERE!
+
+    }, undefined, function (error) {
+        console.log("No custom GLB found, loading fallback room...");
+        createMock3DRoom();
+    });
+
+    function createMock3DRoom() {
+        const floorGeo = new THREE.PlaneGeometry(10, 10);
+        const floorMat = new THREE.MeshStandardMaterial({ color: 0x282a36, side: THREE.DoubleSide });
+        const floor = new THREE.Mesh(floorGeo, floorMat);
+        floor.rotation.x = Math.PI / 2;
+        scene.add(floor);
+
+        const boxGeo = new THREE.BoxGeometry(2, 3, 2);
+        const boxMat = new THREE.MeshStandardMaterial({ color: 0x44475a });
+        const rack = new THREE.Mesh(boxGeo, boxMat);
+        rack.position.set(0, 1.5, 0);
+        scene.add(rack);
+
+        // --- SENSORS PLACEMENT ---
+        // 1. Existing Server Rack Sensor
+        create3DSensorNode(0, 2, 1.1, "Server Rack Temp Sensor", "room.temp");
+        
+        // 2. NEW ROOM SENSOR (Positioned elsewhere in space)
+        create3DSensorNode(-3, 1.5, -2, "Room Wall Temp Sensor", "room.ambient_temp"); 
+    }
+
+    // Helper to spawn interactive 3D Sensor spheres
+    function create3DSensorNode(x, y, z, sensorName, zabbixItemKey) {
+        const sensorGeo = new THREE.SphereGeometry(0.25, 32, 32);
+        const sensorMat = new THREE.MeshStandardMaterial({ 
+            color: 0x6272a4, 
+            emissive: 0x6272a4, 
+            emissiveIntensity: 0.5 
+        });
+        const sensorMesh = new THREE.Mesh(sensorGeo, sensorMat);
+        sensorMesh.position.set(x, y, z);
+        
+        // Bind both the Display Name and the Zabbix Item Key to the mesh metadata
+        sensorMesh.userData = { 
+            name: sensorName, 
+            itemKey: zabbixItemKey, 
+            isSensor: true 
+        };
+        
+        scene.add(sensorMesh);
+        clickableObjects.push(sensorMesh);
+    }
+
+    // ==========================================
+    // 4. MOUSE CLICK / RAYCASTING DETECTION
+    // ==========================================
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+
+    window.addEventListener('click', onPointerClick);
+
+    function onPointerClick(event) {
+        mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+        mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+        raycaster.setFromCamera(mouse, camera);
+        const intersects = raycaster.intersectObjects(clickableObjects);
+
+        if (intersects.length > 0) {
+            const clickedSensor = intersects[0].object;
+            if (clickedSensor.userData.isSensor) {
+                // Pass both display title and item key to the dynamic pop-up
+                openSensorModal(clickedSensor.userData.name, clickedSensor.userData.itemKey);
             }
         }
+    }
 
-        function openSensorModal() {
-            document.getElementById("sensorModal").style.display = "block";
-            fetchSensorData(); // Fetch immediately
-            // Poll Zabbix every 3 seconds while popup is open
-            updateInterval = setInterval(fetchSensorData, 3000); 
-        }
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
 
-        function closeModal() {
-            document.getElementById("sensorModal").style.display = "none";
-            if (updateInterval) clearInterval(updateInterval);
+    function animate() {
+        requestAnimationFrame(animate);
+        controls.update();
+        renderer.render(scene, camera);
+    }
+    animate();
+
+    // ==========================================
+    // 5. DYNAMIC ZABBIX FETCH & MODAL LOGIC
+    // ==========================================
+    async function fetchSensorData(itemKey) {
+        try {
+            const response = await fetch(ZABBIX_URL, {
+                method: "POST",
+                headers: { "Content-Type": "application/json-rpc" },
+                body: JSON.stringify({
+                    jsonrpc: "2.0",
+                    method: "item.get",
+                    params: {
+                        output: ["lastvalue", "units"],
+                        filter: { host: HOST_NAME, key_: itemKey } // Fetch using dynamic item key
+                    },
+                    auth: API_TOKEN,
+                    id: 1
+                })
+            });
+
+            const data = await response.json();
+            
+            if (data.result && data.result.length > 0) {
+                const lastVal = parseFloat(data.result[0].lastvalue).toFixed(1);
+                const units = data.result[0].units || "°C";
+
+                const tempEl = document.getElementById("tempValue");
+                const statusBadge = document.getElementById("statusBadge");
+
+                tempEl.innerText = `${lastVal} ${units}`;
+
+                if (lastVal > 30.0) {
+                    tempEl.classList.add("alarm");
+                    statusBadge.innerText = "ALARM: HIGH TEMP";
+                    statusBadge.className = "status-badge status-alarm";
+                } else {
+                    tempEl.classList.remove("alarm");
+                    statusBadge.innerText = "NORMAL";
+                    statusBadge.className = "status-badge status-ok";
+                }
+            } else {
+                document.getElementById("tempValue").innerText = "N/A";
+            }
+        } catch (err) {
+            console.error("Zabbix API Error:", err);
         }
-    </script>
+    }
+
+    function openSensorModal(name, itemKey) {
+        document.getElementById("sensorName").innerText = name;
+        document.getElementById("sensorModal").style.display = "block";
+        
+        // Initial fetch call
+        fetchSensorData(itemKey);
+        
+        // Clear previous polling intervals if open, then start a new interval
+        if (updateInterval) clearInterval(updateInterval);
+        updateInterval = setInterval(() => fetchSensorData(itemKey), 3000);
+    }
+
+    function closeModal() {
+        document.getElementById("sensorModal").style.display = "none";
+        if (updateInterval) clearInterval(updateInterval);
+    }
+</script>
 </body>
 </html>
