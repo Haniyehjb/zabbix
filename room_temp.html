@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Room Monitoring 3D Dashboard</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #1a1a24;
+            color: white;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+
+        h1 { margin-bottom: 30px; }
+
+        /* Mock Room Map / Container */
+        .room-container {
+            width: 500px;
+            height: 300px;
+            background: #282a36;
+            border: 2px solid #44475a;
+            border-radius: 12px;
+            position: relative;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+
+        /* Interactive Sensor Button (Can be placed over 3D model) */
+        .sensor-node {
+            position: absolute;
+            top: 40%;
+            left: 45%;
+            width: 70px;
+            height: 70px;
+            background: #6272a4;
+            border-radius: 50%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 0 15px rgba(98, 114, 164, 0.6);
+            border: 2px solid #f8f8f2;
+        }
+
+        .sensor-node:hover {
+            transform: scale(1.15);
+            box-shadow: 0 0 25px rgba(255, 121, 198, 0.8);
+        }
+
+        /* Modal/Popup Box */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: #21222c;
+            padding: 25px;
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.8);
+            border: 1px solid #6272a4;
+            width: 320px;
+            text-align: center;
+        }
+
+        .modal h2 { margin-top: 0; color: #8be9fd; }
+        .temp-display { font-size: 3rem; font-weight: bold; margin: 15px 0; color: #50fa7b; }
+        .temp-display.alarm { color: #ff5555; animation: pulse 1s infinite; }
+        .status-badge { padding: 5px 10px; border-radius: 5px; font-weight: bold; }
+        .status-ok { background: #50fa7b; color: #282a36; }
+        .status-alarm { background: #ff5555; color: white; }
+        .close-btn { margin-top: 20px; padding: 8px 16px; background: #6272a4; color: white; border: none; border-radius: 5px; cursor: pointer; }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Server Room Monitoring</h1>
+
+    <div class="room-container">
+        <!-- Interactive Sensor Pin -->
+        <div class="sensor-node" id="sensorPin" onclick="openSensorModal()">
+            <span>🌡️</span>
+            <small style="font-size: 10px;">Temp 1</small>
+        </div>
+    </div>
+
+    <!-- Sensor Details Popup Modal -->
+    <div class="modal" id="sensorModal">
+        <h2 id="sensorName">Server Room Sensor</h2>
+        <div class="temp-display" id="tempValue">-- °C</div>
+        <div>Status: <span id="statusBadge" class="status-badge status-ok">NORMAL</span></div>
+        <button class="close-btn" onclick="closeModal()">Close</button>
+    </div>
+
+    <script>
+        // --- ZABBIX CONFIGURATION ---
+        const ZABBIX_URL = "http://localhost:8080/zabbix/api_jsonrpc.php";
+        const API_TOKEN = ""; // <-- Put your copied API Token here!
+        const HOST_NAME = "Server Room";
+        const ITEM_KEY = "room.temp";
+
+        let updateInterval = null;
+
+        async function fetchSensorData() {
+            try {
+                // 1. Fetch live Temperature item value
+                const response = await fetch(ZABBIX_URL, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json-rpc" },
+                    body: JSON.stringify({
+                        jsonrpc: "2.0",
+                        method: "item.get",
+                        params: {
+                            output: ["lastvalue", "units"],
+                            filter: { host: HOST_NAME, key_: ITEM_KEY }
+                        },
+                        auth: API_TOKEN,
+                        id: 1
+                    })
+                });
+
+                const data = await response.json();
+                
+                if (data.result && data.result.length > 0) {
+                    const lastVal = parseFloat(data.result[0].lastvalue).toFixed(1);
+                    const units = data.result[0].units;
+
+                    const tempEl = document.getElementById("tempValue");
+                    const statusBadge = document.getElementById("statusBadge");
+
+                    tempEl.innerText = `${lastVal} ${units}`;
+
+                    // Trigger visual alarm state if temp > 30°C
+                    if (lastVal > 30.0) {
+                        tempEl.classList.add("alarm");
+                        statusBadge.innerText = "ALARM: HIGH TEMP";
+                        statusBadge.className = "status-badge status-alarm";
+                        document.getElementById("sensorPin").style.background = "#ff5555";
+                    } else {
+                        tempEl.classList.remove("alarm");
+                        statusBadge.innerText = "NORMAL";
+                        statusBadge.className = "status-badge status-ok";
+                        document.getElementById("sensorPin").style.background = "#6272a4";
+                    }
+                }
+            } catch (err) {
+                console.error("Failed to connect to Zabbix API:", err);
+            }
+        }
+
+        function openSensorModal() {
+            document.getElementById("sensorModal").style.display = "block";
+            fetchSensorData(); // Fetch immediately
+            // Poll Zabbix every 3 seconds while popup is open
+            updateInterval = setInterval(fetchSensorData, 3000); 
+        }
+
+        function closeModal() {
+            document.getElementById("sensorModal").style.display = "none";
+            if (updateInterval) clearInterval(updateInterval);
+        }
+    </script>
+</body>
+</html>
