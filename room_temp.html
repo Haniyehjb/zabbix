@@ -466,6 +466,7 @@
     const controls = new THREE.OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
+    controls.target.set(0, 0, 0);
 
     // STUDIO LIGHTING
     const ambientLight = new THREE.AmbientLight(0xffffff, 1.2); 
@@ -531,7 +532,7 @@
     // Load default scene
     gltfLoader.load('room.glb', function (gltf) {
         setupLoadedModel(gltf.scene);
-        create3DSensorNode(new THREE.Vector3(0, 2.2, 1.35), new THREE.Vector3(0, 1, 0), "Server Rack Temp #1", "room.temp");
+        create3DSensorNode(new THREE.Vector3(0, 0.45, 1.25), new THREE.Vector3(0, 1, 0), "Server Rack Temp #1", "room.temp");
     }, undefined, function () {
         createMock3DRoom();
     });
@@ -555,15 +556,26 @@
         roomGroup.add(rack);
 
         setupLoadedModel(roomGroup);
-        create3DSensorNode(new THREE.Vector3(0, 2.2, 1.35), new THREE.Vector3(0, 0, 1), "Server Rack Temp #1", "room.temp");
+        create3DSensorNode(new THREE.Vector3(0, 0.45, 1.25), new THREE.Vector3(0, 0, 1), "Server Rack Temp #1", "room.temp");
     }
 
+    // AUTOMATIC MODEL RE-CENTERING SYSTEM
     function setupLoadedModel(modelObject) {
         if (currentLoadedModel) {
             scene.remove(currentLoadedModel);
         }
 
-        currentLoadedModel = modelObject;
+        const centeredGroup = new THREE.Group();
+
+        // Compute exact bounding box and geometric midpoint
+        const box = new THREE.Box3().setFromObject(modelObject);
+        const center = box.getCenter(new THREE.Vector3());
+
+        // Offset inner model so center resides strictly at (0, 0, 0)
+        modelObject.position.sub(center);
+        centeredGroup.add(modelObject);
+
+        currentLoadedModel = centeredGroup;
         roomSurfaces = []; 
         originalMaterials.clear();
 
@@ -588,6 +600,10 @@
                 roomSurfaces.push(child);
             }
         });
+
+        // Set camera target directly to true geometric origin
+        controls.target.set(0, 0, 0);
+        controls.update();
 
         scene.add(currentLoadedModel);
     }
@@ -723,6 +739,8 @@
     document.getElementById('autoRotateToggleBtn').addEventListener('click', function () {
         isAutoRotating = !isAutoRotating;
         this.classList.toggle('active', isAutoRotating);
+        
+        controls.target.set(0, 0, 0); // Lock rotation pivot directly to mid-center point
         controls.autoRotate = isAutoRotating;
         controls.autoRotateSpeed = 2.0;
     });
@@ -756,6 +774,7 @@
         isWireframe = false;
         isAutoRotating = false;
         controls.autoRotate = false;
+        controls.target.set(0, 0, 0);
 
         document.getElementById('wireframeToggleBtn').classList.remove('active');
         document.getElementById('autoRotateToggleBtn').classList.remove('active');
