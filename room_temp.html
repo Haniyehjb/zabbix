@@ -15,7 +15,9 @@
             --accent-cyan: #00f2fe;
             --accent-purple: #7928ca;
             --accent-green: #00f5a0;
+            --accent-yellow: #ffaa00;
             --accent-red: #ff0055;
+            --accent-grey: #94a3b8;
             --text-main: #f8f8f2;
             --text-muted: #94a3b8;
         }
@@ -212,7 +214,7 @@
         .btn-utility:hover { background: rgba(255, 255, 255, 0.18); }
         .btn-utility.active { background: var(--accent-cyan); color: #0f111a; font-weight: 700; }
 
-        /* Floating 3D Node Labels */
+        /* Dynamic Floating 3D Overlay Labels */
         .sensor-label {
             position: absolute;
             background: rgba(15, 17, 26, 0.85);
@@ -226,8 +228,15 @@
             transform: translate(-50%, -100%);
             white-space: nowrap;
             box-shadow: 0 0 10px rgba(0, 242, 254, 0.2);
-            transition: opacity 0.2s ease;
+            transition: all 0.3s ease;
         }
+
+        /* Color classes for overlay labels */
+        .sensor-label.normal { border-color: var(--accent-green); color: var(--accent-green); box-shadow: 0 0 10px rgba(0, 245, 160, 0.3); }
+        .sensor-label.warning { border-color: var(--accent-yellow); color: var(--accent-yellow); box-shadow: 0 0 10px rgba(255, 170, 0, 0.3); }
+        .sensor-label.alarm { border-color: var(--accent-red); color: var(--accent-red); box-shadow: 0 0 10px rgba(255, 0, 85, 0.4); }
+        .sensor-label.disconnected { border-color: var(--accent-grey); color: var(--accent-grey); box-shadow: none; }
+        .sensor-label.selected { border-color: var(--accent-cyan); color: var(--accent-cyan); box-shadow: 0 0 15px rgba(0, 242, 254, 0.5); }
 
         /* Modal Panels */
         .modal {
@@ -255,8 +264,8 @@
             margin: 15px 0; 
             color: var(--accent-green); 
             text-shadow: 0 0 20px rgba(0, 245, 160, 0.3); 
+            transition: color 0.3s ease;
         }
-        .temp-display.alarm { color: var(--accent-red); text-shadow: 0 0 20px rgba(255, 0, 85, 0.5); animation: pulse 1s infinite; }
         
         .status-badge { 
             padding: 6px 14px; 
@@ -265,9 +274,14 @@
             font-size: 0.75rem; 
             letter-spacing: 0.5px;
             display: inline-block;
+            transition: all 0.3s ease;
         }
+        
+        /* Dynamic Modal Status Theme Styles */
         .status-ok { background: rgba(0, 245, 160, 0.15); color: var(--accent-green); border: 1px solid var(--accent-green); }
-        .status-alarm { background: rgba(255, 0, 85, 0.15); color: var(--accent-red); border: 1px solid var(--accent-red); }
+        .status-warning { background: rgba(255, 170, 0, 0.15); color: var(--accent-yellow); border: 1px solid var(--accent-yellow); }
+        .status-alarm { background: rgba(255, 0, 85, 0.15); color: var(--accent-red); border: 1px solid var(--accent-red); animation: pulse 1s infinite; }
+        .status-disconnected { background: rgba(148, 163, 184, 0.15); color: var(--accent-grey); border: 1px solid var(--accent-grey); }
         
         .modal-buttons { display: flex; gap: 10px; margin-top: 25px; }
         .modal-btn { 
@@ -417,7 +431,17 @@
     const API_TOKEN = "66165b04010ffd26311c49c0c20a23f9ae9369879388cb8fb654fabab755ca34"; 
     const HOST_NAME = "Server Room"; 
 
-    let updateInterval = null;
+    // COLOR THEME MAP
+    const SENSOR_COLORS = {
+        NORMAL: 0x00f5a0,       // Green
+        WARNING: 0xffaa00,      // Yellow (almost high)
+        HIGH_ALARM: 0xff0055,   // Red (high / error)
+        DISCONNECTED: 0x94a3b8, // Slate Grey
+        SELECTED: 0x00f2fe      // Blue (clicked / active)
+    };
+
+    let globalPollingTimer = null;
+    let activeModalSensor = null;
     let sensorCount = 1;
     let isPlacementMode = false;
     let isDeleteMode = false;
@@ -443,7 +467,7 @@
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
 
-    // HIGH-INTENSITY 3-POINT STUDIO LIGHTING SYSTEM
+    // STUDIO LIGHTING
     const ambientLight = new THREE.AmbientLight(0xffffff, 1.2); 
     scene.add(ambientLight);
 
@@ -468,7 +492,7 @@
     // SENSOR GLB MODEL TEMPLATE VARIABLE
     let loadedSensorTemplate = null;
 
-    // LOAD INITIAL MODEL & SENSOR.GLB
+    // LOAD LOADERS
     const gltfLoader = new THREE.GLTFLoader();
     const stlLoader = new THREE.STLLoader();
 
@@ -476,12 +500,10 @@
     gltfLoader.load('sensor.glb', function (gltf) {
         loadedSensorTemplate = gltf.scene;
         
-        // Normalize sensor dimensions so it attaches nicely
         const box = new THREE.Box3().setFromObject(loadedSensorTemplate);
         const size = box.getSize(new THREE.Vector3());
         const maxDim = Math.max(size.x, size.y, size.z);
         
-        // Standardize sensor size to 0.3 units width/height
         if (maxDim > 0) {
             const targetScale = 0.3 / maxDim;
             loadedSensorTemplate.scale.set(targetScale, targetScale, targetScale);
@@ -494,7 +516,7 @@
             }
         });
     }, undefined, function (error) {
-        console.warn("sensor.glb not found or failed to load. Defaulting to fallback 3D shape.");
+        console.warn("sensor.glb file not found. Defaulting to fallback 3D node shapes.");
     });
 
     // Initialize OpenCASCADE for STEP files
@@ -506,7 +528,7 @@
         return occtEngine;
     }
 
-    // Load default room scene
+    // Load default scene
     gltfLoader.load('room.glb', function (gltf) {
         setupLoadedModel(gltf.scene);
         create3DSensorNode(new THREE.Vector3(0, 2.2, 1.35), new THREE.Vector3(0, 1, 0), "Server Rack Temp #1", "room.temp");
@@ -681,7 +703,7 @@
         }
     });
 
-    // 3D VISUAL TOOLS
+    // 3D VISUAL CONTROLS
     let isWireframe = false;
     let isAutoRotating = false;
 
@@ -750,33 +772,28 @@
         }
     });
 
-    // SPAWN 3D SENSOR NODE WITH ANGLE / NORMAL SURFACE ORIENTATION
+    // 3D SENSOR CREATION & SURFACE ORIENTATION
     function create3DSensorNode(point, normal, sensorName, zabbixItemKey) {
         let sensorObject;
 
         if (loadedSensorTemplate) {
             sensorObject = loadedSensorTemplate.clone(true);
         } else {
-            // Fallback object if sensor.glb is missing
             const geo = new THREE.CylinderGeometry(0.12, 0.12, 0.08, 16);
-            const mat = new THREE.MeshStandardMaterial({ color: 0x00f2fe, emissive: 0x00f2fe, emissiveIntensity: 0.5 });
+            const mat = new THREE.MeshStandardMaterial({ color: SENSOR_COLORS.DISCONNECTED });
             sensorObject = new THREE.Mesh(geo, mat);
         }
 
-        // 1. Set Position
+        // Align position and orientation along surface normal
         sensorObject.position.copy(point);
-
-        // 2. Rotate Sensor to Align Perfectly with the Surface Normal
-        const upVector = new THREE.Vector3(0, 1, 0); // Default default-up vector
+        const upVector = new THREE.Vector3(0, 1, 0);
         const quaternion = new THREE.Quaternion();
-        
-        // Calculate rotational difference between default "up" and clicked surface direction
         quaternion.setFromUnitVectors(upVector, normal.clone().normalize());
         sensorObject.quaternion.copy(quaternion);
 
-        // 3. Attach UI Metadata
+        // Attach UI label
         const labelEl = document.createElement('div');
-        labelEl.className = 'sensor-label';
+        labelEl.className = 'sensor-label disconnected';
         labelEl.innerText = sensorName;
         labelsContainer.appendChild(labelEl);
         
@@ -784,12 +801,41 @@
             name: sensorName, 
             itemKey: zabbixItemKey, 
             isSensor: true,
-            labelElement: labelEl
+            labelElement: labelEl,
+            currentStatus: 'DISCONNECTED'
         };
         
         scene.add(sensorObject);
         clickableSensors.push(sensorObject);
         updateSensorCount();
+
+        // Initial Telemetry Fetch
+        fetchSensorData(sensorObject);
+    }
+
+    // DYNAMIC MATERIAL SENSOR COLORIZER
+    function setSensorColor(sensorObject, colorHex, statusStyleClass) {
+        sensorObject.traverse((child) => {
+            if (child.isMesh && child.material) {
+                child.material = child.material.clone();
+                child.material.color.setHex(colorHex);
+
+                if (colorHex === SENSOR_COLORS.HIGH_ALARM) {
+                    child.material.emissive.setHex(SENSOR_COLORS.HIGH_ALARM);
+                    child.material.emissiveIntensity = 0.5;
+                } else if (colorHex === SENSOR_COLORS.SELECTED) {
+                    child.material.emissive.setHex(SENSOR_COLORS.SELECTED);
+                    child.material.emissiveIntensity = 0.4;
+                } else {
+                    child.material.emissive.setHex(0x000000);
+                    child.material.emissiveIntensity = 0;
+                }
+            }
+        });
+
+        if (sensorObject.userData.labelElement && statusStyleClass) {
+            sensorObject.userData.labelElement.className = `sensor-label ${statusStyleClass}`;
+        }
     }
 
     function updateLabels() {
@@ -869,7 +915,7 @@
         hintBox.className = 'hint';
     }
 
-    // RAYCASTING WITH SURFACE NORMAL VECTOR CALCULATION
+    // RAYCASTING
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
 
@@ -889,7 +935,6 @@
                 const hit = intersects[0];
                 const point = hit.point;
                 
-                // Extract Surface Normal Direction (Convert from local to world orientation)
                 const normalMatrix = new THREE.Matrix3().getNormalMatrix(hit.object.matrixWorld);
                 const worldNormal = hit.face.normal.clone().applyMatrix3(normalMatrix).normalize();
 
@@ -908,7 +953,6 @@
         if (isDeleteMode) {
             const intersects = raycaster.intersectObjects(clickableSensors, true);
             if (intersects.length > 0) {
-                // Find root group/mesh inside clickableSensors array
                 let topObject = intersects[0].object;
                 while (topObject.parent && !clickableSensors.includes(topObject)) {
                     topObject = topObject.parent;
@@ -924,7 +968,7 @@
             while (topObject.parent && !clickableSensors.includes(topObject)) {
                 topObject = topObject.parent;
             }
-            openSensorModal(topObject.userData.name, topObject.userData.itemKey);
+            openSensorModal(topObject);
         }
     }
 
@@ -951,6 +995,9 @@
 
     function confirmDeleteSensor() {
         if (sensorToDelete) {
+            if (sensorToDelete === activeModalSensor) {
+                closeModal();
+            }
             if (sensorToDelete.userData.labelElement) {
                 sensorToDelete.userData.labelElement.remove();
             }
@@ -969,8 +1016,10 @@
         sensorToDelete = null;
     }
 
-    // ZABBIX API FETCH
-    async function fetchSensorData(itemKey) {
+    // ZABBIX API TELEMETRY & COLOR ENGINE
+    async function fetchSensorData(sensorObject) {
+        const itemKey = sensorObject.userData.itemKey;
+
         try {
             const response = await fetch(ZABBIX_URL, {
                 method: "POST",
@@ -990,44 +1039,118 @@
             const data = await response.json();
             
             if (data.result && data.result.length > 0) {
-                const lastVal = parseFloat(data.result[0].lastvalue).toFixed(1);
+                const value = parseFloat(data.result[0].lastvalue);
+                const lastValFormatted = value.toFixed(1);
                 const units = data.result[0].units || "°C";
 
-                const tempEl = document.getElementById("tempValue");
-                const statusBadge = document.getElementById("statusBadge");
+                let calculatedColor = SENSOR_COLORS.NORMAL;
+                let statusBadgeText = "SYSTEM NORMAL";
+                let statusClass = "normal";
+                let badgeStyleClass = "status-ok";
 
-                tempEl.innerText = `${lastVal} ${units}`;
-
-                if (lastVal > 30.0) {
-                    tempEl.classList.add("alarm");
-                    statusBadge.innerText = "HIGH TEMP ALARM";
-                    statusBadge.className = "status-badge status-alarm";
+                // Threshold Evaluator Logic
+                if (value >= 35.0) {
+                    // High Alarm / Error -> RED
+                    calculatedColor = SENSOR_COLORS.HIGH_ALARM;
+                    statusBadgeText = "HIGH TEMP ALARM";
+                    statusClass = "alarm";
+                    badgeStyleClass = "status-alarm";
+                } else if (value >= 28.0 && value < 35.0) {
+                    // Almost High / Warning -> YELLOW
+                    calculatedColor = SENSOR_COLORS.WARNING;
+                    statusBadgeText = "WARNING: HIGH TEMP";
+                    statusClass = "warning";
+                    badgeStyleClass = "status-warning";
                 } else {
-                    tempEl.classList.remove("alarm");
-                    statusBadge.innerText = "SYSTEM NORMAL";
-                    statusBadge.className = "status-badge status-ok";
+                    // Normal Status -> GREEN
+                    calculatedColor = SENSOR_COLORS.NORMAL;
+                    statusBadgeText = "SYSTEM NORMAL";
+                    statusClass = "normal";
+                    badgeStyleClass = "status-ok";
                 }
+
+                sensorObject.userData.currentStatus = statusClass;
+
+                // Only apply non-selection color if sensor isn't currently clicked/blue
+                if (sensorObject !== activeModalSensor) {
+                    setSensorColor(sensorObject, calculatedColor, statusClass);
+                }
+
+                // If modal is active for this sensor, update values & badges
+                if (activeModalSensor === sensorObject) {
+                    const tempEl = document.getElementById("tempValue");
+                    const statusBadge = document.getElementById("statusBadge");
+
+                    tempEl.innerText = `${lastValFormatted} ${units}`;
+                    tempEl.style.color = (statusClass === 'alarm') ? '#ff0055' : ((statusClass === 'warning') ? '#ffaa00' : '#00f5a0');
+
+                    statusBadge.innerText = statusBadgeText;
+                    statusBadge.className = `status-badge ${badgeStyleClass}`;
+                }
+
             } else {
-                document.getElementById("tempValue").innerText = "N/A";
+                markSensorDisconnected(sensorObject);
             }
         } catch (err) {
             console.error("Zabbix API Error:", err);
+            markSensorDisconnected(sensorObject);
         }
     }
 
-    function openSensorModal(name, itemKey) {
-        document.getElementById("sensorName").innerText = name;
+    function markSensorDisconnected(sensorObject) {
+        sensorObject.userData.currentStatus = 'disconnected';
+        if (sensorObject !== activeModalSensor) {
+            setSensorColor(sensorObject, SENSOR_COLORS.DISCONNECTED, 'disconnected');
+        }
+
+        if (activeModalSensor === sensorObject) {
+            const tempEl = document.getElementById("tempValue");
+            const statusBadge = document.getElementById("statusBadge");
+
+            tempEl.innerText = "N/A";
+            tempEl.style.color = "#94a3b8";
+
+            statusBadge.innerText = "DISCONNECTED";
+            statusBadge.className = "status-badge status-disconnected";
+        }
+    }
+
+    // Global Background Telemetry Poller
+    function pollAllSensors() {
+        clickableSensors.forEach(sensor => {
+            fetchSensorData(sensor);
+        });
+    }
+
+    // Poll Zabbix every 5 seconds globally
+    setInterval(pollAllSensors, 5000);
+
+    function openSensorModal(sensorObject) {
+        // Revert previous selected sensor color state
+        if (activeModalSensor && activeModalSensor !== sensorObject) {
+            fetchSensorData(activeModalSensor);
+        }
+
+        activeModalSensor = sensorObject;
+        
+        // Highlight active sensor with Blue
+        setSensorColor(sensorObject, SENSOR_COLORS.SELECTED, 'selected');
+
+        document.getElementById("sensorName").innerText = sensorObject.userData.name;
         document.getElementById("sensorModal").style.display = "block";
         
-        fetchSensorData(itemKey);
-        
-        if (updateInterval) clearInterval(updateInterval);
-        updateInterval = setInterval(() => fetchSensorData(itemKey), 3000);
+        fetchSensorData(sensorObject);
     }
 
     function closeModal() {
         document.getElementById("sensorModal").style.display = "none";
-        if (updateInterval) clearInterval(updateInterval);
+        
+        // Revert selected sensor color back to telemetry status
+        if (activeModalSensor) {
+            const previousSensor = activeModalSensor;
+            activeModalSensor = null;
+            fetchSensorData(previousSensor);
+        }
     }
 </script>
 </body>
