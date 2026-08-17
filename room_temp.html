@@ -3,26 +3,95 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Room Monitoring - Zabbix</title>
+    <title>3D Digital Twin - Zabbix Sensor Monitoring (glTF/GLB Focus)</title>
+    <!-- Font Awesome Icons & Google Font -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
     <style>
+        :root {
+            --bg-dark: #0f111a;
+            --panel-bg: rgba(22, 27, 38, 0.75);
+            --panel-border: rgba(98, 114, 164, 0.3);
+            --accent-cyan: #00f2fe;
+            --accent-purple: #7928ca;
+            --accent-green: #00f5a0;
+            --accent-red: #ff0055;
+            --text-main: #f8f8f2;
+            --text-muted: #94a3b8;
+        }
+
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: #1a1a24;
-            color: white;
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-dark);
+            color: var(--text-main);
             margin: 0;
             overflow: hidden;
         }
 
-        /* Top Header */
+        /* Top Navigation Header & Status Bar */
         header {
             position: absolute;
-            top: 15px;
+            top: 20px;
             left: 20px;
+            right: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
             z-index: 10;
             pointer-events: none;
         }
-        h1 { margin: 0; font-size: 1.5rem; color: #8be9fd; text-shadow: 0 0 10px rgba(139, 233, 253, 0.5); }
-        p { margin: 5px 0 0 0; font-size: 0.85rem; color: #6272a4; }
+
+        .brand-panel {
+            background: var(--panel-bg);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--panel-border);
+            padding: 12px 20px;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+            pointer-events: auto;
+        }
+
+        h1 { 
+            margin: 0; 
+            font-size: 1.25rem; 
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--accent-cyan), #4facfe);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        p { margin: 3px 0 0 0; font-size: 0.75rem; color: var(--text-muted); }
+
+        .system-stats {
+            display: flex;
+            gap: 15px;
+            pointer-events: auto;
+        }
+
+        .stat-badge {
+            background: var(--panel-bg);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--panel-border);
+            padding: 8px 16px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+        .stat-badge i { font-size: 1rem; color: var(--accent-cyan); }
+        .pulse-dot {
+            width: 8px;
+            height: 8px;
+            background-color: var(--accent-green);
+            border-radius: 50%;
+            box-shadow: 0 0 10px var(--accent-green);
+            animation: blink 1.5s infinite;
+        }
 
         /* 3D Canvas Container */
         #canvas-container {
@@ -31,151 +100,228 @@
             display: block;
         }
         
-        #canvas-container.placement-mode {
-            cursor: crosshair !important;
-        }
+        #canvas-container.placement-mode { cursor: crosshair !important; }
+        #canvas-container.delete-mode { cursor: pointer !important; }
 
-        /* Control Panel for Adding Sensors */
+        /* Control Panel */
         .control-panel {
             position: absolute;
-            top: 15px;
+            top: 100px;
             right: 20px;
-            background: rgba(33, 34, 44, 0.9);
-            padding: 15px 20px;
-            border-radius: 10px;
-            border: 1px solid #6272a4;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            background: var(--panel-bg);
+            backdrop-filter: blur(16px);
+            padding: 20px;
+            border-radius: 16px;
+            border: 1px solid var(--panel-border);
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
             z-index: 10;
-            width: 260px;
+            width: 280px;
         }
-        .control-panel h3 { margin: 0 0 10px 0; color: #8be9fd; font-size: 1.1rem; }
-        .form-group { margin-bottom: 8px; text-align: left; }
-        .form-group label { display: block; font-size: 0.75rem; color: #f8f8f2; margin-bottom: 2px; }
+
+        .control-panel h3 { 
+            margin: 0 0 15px 0; 
+            font-size: 1rem; 
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            padding-bottom: 10px;
+        }
+
+        .form-group { margin-bottom: 12px; text-align: left; }
+        .form-group label { display: block; font-size: 0.75rem; color: var(--text-muted); margin-bottom: 5px; font-weight: 600; }
         .form-group input { 
             width: 100%; 
-            padding: 6px; 
-            background: #282a36; 
-            border: 1px solid #44475a; 
-            color: #f8f8f2; 
-            border-radius: 4px; 
+            padding: 9px 12px; 
+            background: rgba(15, 17, 26, 0.7); 
+            border: 1px solid var(--panel-border); 
+            color: var(--text-main); 
+            border-radius: 8px; 
             box-sizing: border-box;
             font-size: 0.85rem;
+            transition: all 0.3s ease;
+        }
+        .form-group input:focus {
+            outline: none;
+            border-color: var(--accent-cyan);
+            box-shadow: 0 0 10px rgba(0, 242, 254, 0.3);
         }
 
-        .btn-add {
+        /* File Upload Input styling */
+        .file-upload-btn {
             width: 100%;
-            margin-top: 10px;
-            padding: 10px;
-            background: #bd93f9;
-            color: #282a36;
-            border: none;
-            border-radius: 6px;
+            padding: 8px 12px;
+            background: rgba(0, 242, 254, 0.1);
+            border: 1px dashed var(--accent-cyan);
+            color: var(--accent-cyan);
+            border-radius: 8px;
             cursor: pointer;
-            font-weight: bold;
-            transition: background 0.2s, transform 0.1s;
+            font-size: 0.8rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: all 0.2s ease;
+            box-sizing: border-box;
         }
-        .btn-add:hover { background: #ff79c6; }
-        .btn-add.active {
-            background: #ff5555;
-            color: white;
-            animation: pulse 1.5s infinite;
+        .file-upload-btn:hover { background: rgba(0, 242, 254, 0.2); }
+
+        .button-group { display: flex; gap: 10px; margin-top: 15px; }
+
+        .btn-panel {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.8rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            transition: all 0.2s ease;
         }
 
-        /* Sensor Pop-up Modal */
+        .btn-add { background: linear-gradient(135deg, #00f2fe, #4facfe); color: #0f111a; }
+        .btn-add:hover { transform: translateY(-2px); box-shadow: 0 4px 15px rgba(0, 242, 254, 0.4); }
+        .btn-add.active { background: #ff0055; color: white; animation: pulse 1.5s infinite; }
+
+        .btn-delete { background: rgba(255, 0, 85, 0.15); color: #ff0055; border: 1px solid rgba(255, 0, 85, 0.4); }
+        .btn-delete:hover { background: rgba(255, 0, 85, 0.3); }
+        .btn-delete.active { background: #ffaa00; color: #0f111a; border-color: #ffaa00; animation: pulse 1.5s infinite; }
+
+        /* Floating 3D Node Labels */
+        .sensor-label {
+            position: absolute;
+            background: rgba(15, 17, 26, 0.85);
+            border: 1px solid var(--accent-cyan);
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            color: var(--accent-cyan);
+            pointer-events: none;
+            transform: translate(-50%, -100%);
+            white-space: nowrap;
+            box-shadow: 0 0 10px rgba(0, 242, 254, 0.2);
+            transition: opacity 0.2s ease;
+        }
+
+        /* Modal Panels */
         .modal {
             display: none;
             position: fixed;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            background: #21222c;
+            background: var(--panel-bg);
+            backdrop-filter: blur(20px);
             padding: 25px;
-            border-radius: 12px;
-            box-shadow: 0 0 30px rgba(0,0,0,0.8);
-            border: 1px solid #6272a4;
+            border-radius: 16px;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8);
+            border: 1px solid var(--panel-border);
             width: 320px;
             text-align: center;
             z-index: 100;
+            animation: fadeIn 0.3s ease-out;
         }
 
-        .modal h2 { margin-top: 0; color: #8be9fd; font-size: 1.3rem; }
-        .temp-display { font-size: 3rem; font-weight: bold; margin: 15px 0; color: #50fa7b; transition: color 0.3s ease; }
-        .temp-display.alarm { color: #ff5555; animation: pulse 1s infinite; }
-        .status-badge { padding: 6px 12px; border-radius: 6px; font-weight: bold; font-size: 0.9rem; }
-        .status-ok { background: #50fa7b; color: #282a36; }
-        .status-alarm { background: #ff5555; color: white; }
+        .modal h2 { margin-top: 0; color: var(--accent-cyan); font-size: 1.2rem; font-weight: 700; }
+        .temp-display { 
+            font-size: 3.5rem; 
+            font-weight: 700; 
+            margin: 15px 0; 
+            color: var(--accent-green); 
+            text-shadow: 0 0 20px rgba(0, 245, 160, 0.3); 
+        }
+        .temp-display.alarm { color: var(--accent-red); text-shadow: 0 0 20px rgba(255, 0, 85, 0.5); animation: pulse 1s infinite; }
         
-        .modal-buttons {
-            display: flex;
-            gap: 10px;
-            margin-top: 20px;
+        .status-badge { 
+            padding: 6px 14px; 
+            border-radius: 20px; 
+            font-weight: 700; 
+            font-size: 0.75rem; 
+            letter-spacing: 0.5px;
+            display: inline-block;
         }
-
+        .status-ok { background: rgba(0, 245, 160, 0.15); color: var(--accent-green); border: 1px solid var(--accent-green); }
+        .status-alarm { background: rgba(255, 0, 85, 0.15); color: var(--accent-red); border: 1px solid var(--accent-red); }
+        
+        .modal-buttons { display: flex; gap: 10px; margin-top: 25px; }
         .modal-btn { 
-            flex: 1;
-            padding: 10px; 
-            border: none; 
-            border-radius: 6px; 
-            cursor: pointer; 
-            font-weight: bold;
-            transition: background 0.2s;
+            flex: 1; padding: 10px; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 0.85rem; transition: all 0.2s; 
         }
-        
-        .close-btn { 
-            background: #6272a4; 
-            color: white; 
-        }
-        .close-btn:hover { background: #bd93f9; }
+        .close-btn { background: rgba(148, 163, 184, 0.2); color: var(--text-main); }
+        .close-btn:hover { background: rgba(148, 163, 184, 0.4); }
+        .confirm-btn { background: var(--accent-red); color: white; }
+        .confirm-btn:hover { background: #d00045; }
 
-        .delete-btn {
-            background: #ff5555;
-            color: white;
-        }
-        .delete-btn:hover { background: #ff79c6; }
-
-        @keyframes pulse {
-            0% { transform: scale(1); }
-            50% { transform: scale(1.03); }
-            100% { transform: scale(1); }
-        }
-
-        /* Instruction Hint */
+        /* Instruction Hint Bar */
         .hint {
             position: absolute;
-            bottom: 20px;
+            bottom: 25px;
             left: 50%;
             transform: translateX(-50%);
-            background: rgba(40, 42, 54, 0.85);
-            padding: 8px 16px;
-            border-radius: 20px;
-            font-size: 0.85rem;
-            color: #f8f8f2;
+            background: var(--panel-bg);
+            backdrop-filter: blur(12px);
+            padding: 10px 20px;
+            border-radius: 30px;
+            font-size: 0.8rem;
+            color: var(--text-muted);
             pointer-events: none;
-            border: 1px solid #44475a;
+            border: 1px solid var(--panel-border);
+            display: flex;
+            align-items: center;
+            gap: 10px;
             transition: all 0.3s ease;
         }
-        .hint.highlight {
-            background: rgba(255, 121, 198, 0.9);
-            color: #282a36;
-            font-weight: bold;
-        }
+        .hint.highlight { border-color: var(--accent-cyan); color: var(--accent-cyan); box-shadow: 0 0 15px rgba(0, 242, 254, 0.3); }
+        .hint.delete-highlight { border-color: var(--accent-red); color: var(--accent-red); box-shadow: 0 0 15px rgba(255, 0, 85, 0.3); }
+
+        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.03); } 100% { transform: scale(1); } }
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+        @keyframes fadeIn { from { opacity: 0; transform: translate(-50%, -48%); } to { opacity: 1; transform: translate(-50%, -50%); } }
     </style>
 
-    <!-- Load Three.js Engine and GLTF Loader directly via CDN -->
+    <!-- Three.js Engine & Loaders (GLTF + STL + STEP WASM Loaders) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/STLLoader.js"></script>
+
+    <!-- OpenCASCADE WebAssembly CAD Parser for Native .STEP / .STP Support -->
+    <script src="https://cdn.jsdelivr.net/npm/occt-import-js@0.0.12/dist/occt-import-js.js"></script>
 </head>
 <body>
 
     <header>
-        <h1>Server Room 3D Digital Twin</h1>
-        <p>Interactive Sensor Monitoring connected to Zabbix</p>
+        <div class="brand-panel">
+            <h1><i class="fa-solid fa-cube"></i> DIGITAL TWIN STUDIO</h1>
+            <p>glTF & 3D CAD Telemetry Monitoring</p>
+        </div>
+
+        <div class="system-stats">
+            <div class="stat-badge"><div class="pulse-dot"></div> Zabbix API Connected</div>
+            <div class="stat-badge"><i class="fa-solid fa-microchip"></i> Sensors: <span id="statSensorCount">0</span></div>
+        </div>
     </header>
 
-    <!-- Add Sensor UI Panel -->
+    <!-- Control Panel -->
     <div class="control-panel">
-        <h3>📍 Add Sensor</h3>
+        <h3><i class="fa-solid fa-layer-group"></i> Model & Sensor Controls</h3>
+
+        <!-- Model File Selector -->
+        <div class="form-group">
+            <label>Load Custom 3D Model (.GLTF / .GLB)</label>
+            <label for="modelFileInput" class="file-upload-btn">
+                <i class="fa-solid fa-file-import"></i> Upload .GLB / .GLTF / .STEP
+            </label>
+            <input type="file" id="modelFileInput" accept=".glb,.gltf,.stl,.step,.stp" style="display: none;">
+        </div>
+
         <div class="form-group">
             <label for="sensorTitle">Sensor Display Name</label>
             <input type="text" id="sensorTitle" value="Server Rack Sensor #1">
@@ -184,167 +330,374 @@
             <label for="itemKey">Zabbix Item Key</label>
             <input type="text" id="itemKey" value="room.temp">
         </div>
-        <button id="togglePlaceBtn" class="btn-add">📍 Place Sensor (Click Scene)</button>
+        
+        <div class="button-group">
+            <button id="togglePlaceBtn" class="btn-panel btn-add"><i class="fa-solid fa-plus"></i> Add Sensor</button>
+            <button id="toggleDeleteBtn" class="btn-panel btn-delete"><i class="fa-solid fa-trash"></i> Delete</button>
+        </div>
     </div>
 
-    <div id="hintBox" class="hint">🖱️ Left Click + Drag to rotate | Scroll to Zoom | Click a sensor to view live data</div>
+    <div id="hintBox" class="hint"><i class="fa-solid fa-computer-mouse"></i> Left Click + Drag to rotate | Scroll to Zoom | Click sensor to inspect</div>
 
-    <!-- 3D Canvas -->
+    <!-- HTML Overlay Container for 3D Labels -->
+    <div id="labels-container" style="position: absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index: 5;"></div>
+
     <div id="canvas-container"></div>
 
-    <!-- Sensor Details Popup Modal -->
+    <!-- Sensor Details Modal -->
     <div class="modal" id="sensorModal">
         <h2 id="sensorName">Server Room Temp Sensor</h2>
         <div class="temp-display" id="tempValue">-- °C</div>
         <div>Status: <span id="statusBadge" class="status-badge status-ok">NORMAL</span></div>
         <div class="modal-buttons">
-            <button class="modal-btn delete-btn" onclick="deleteCurrentSensor()">🗑️ Delete</button>
-            <button class="modal-btn close-btn" onclick="closeModal()">Close</button>
+            <button class="modal-btn close-btn" onclick="closeModal()">Close Panel</button>
+        </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div class="modal" id="confirmDeleteModal">
+        <h2 style="color: var(--accent-red);"><i class="fa-solid fa-triangle-exclamation"></i> Confirm Delete</h2>
+        <p id="confirmDeleteText" style="color: var(--text-muted); font-size: 0.9rem; margin: 15px 0;">Are you sure you want to remove this sensor?</p>
+        <div class="modal-buttons">
+            <button class="modal-btn confirm-btn" onclick="confirmDeleteSensor()">Remove</button>
+            <button class="modal-btn close-btn" onclick="closeConfirmModal()">Cancel</button>
         </div>
     </div>
 
    <script>
-    // ==========================================
-    // 1. ZABBIX API CONFIGURATION
-    // ==========================================
     const ZABBIX_URL = "http://localhost:8080/zabbix/api_jsonrpc.php";
-    const API_TOKEN = ""; 
-    const HOST_NAME = "Server Room"; // Default host in Zabbix
+    const API_TOKEN = "66165b04010ffd26311c49c0c20a23f9ae9369879388cb8fb654fabab755ca34"; 
+    const HOST_NAME = "Server Room"; 
 
     let updateInterval = null;
     let sensorCount = 1;
     let isPlacementMode = false;
-    let activeSelectedSensor = null; // Currently opened sensor mesh
+    let isDeleteMode = false;
+    let sensorToDelete = null;
 
-    // ==========================================
-    // 2. THREE.JS SCENE SETUP
-    // ==========================================
+    // SCENE SETUP
     const container = document.getElementById('canvas-container');
+    const labelsContainer = document.getElementById('labels-container');
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x1a1a24);
+    scene.background = new THREE.Color(0x0f111a);
 
     const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
-    camera.position.set(5, 5, 8);
+    camera.position.set(6, 6, 9);
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.shadowMap.enabled = true;
     container.appendChild(renderer.domElement);
 
     const controls = new THREE.OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
 
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+    // LIGHTING
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
     scene.add(ambientLight);
 
-    const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    const dirLight = new THREE.DirectionalLight(0x00f2fe, 1.0);
     dirLight.position.set(10, 20, 10);
     scene.add(dirLight);
 
     let clickableSensors = [];
-    const roomSurfaces = []; // Surfaces where sensors can be placed
+    let roomSurfaces = [];
+    let currentLoadedModel = null;
 
-    // ==========================================
-    // 3. LOAD MODEL & SURFACES
-    // ==========================================
-    const loader = new THREE.GLTFLoader();
-    
-    loader.load('room.glb', function (gltf) {
-        const roomModel = gltf.scene;
-        scene.add(roomModel);
-        
-        // Add room surfaces to intersect with
-        roomModel.traverse((child) => {
-            if (child.isMesh) roomSurfaces.push(child);
-        });
+    // LOAD INITIAL MODEL OR FALLBACK
+    const gltfLoader = new THREE.GLTFLoader();
+    const stlLoader = new THREE.STLLoader();
 
-        // Add initial sensor
-        create3DSensorNode(0, 2, 1.1, "Server Rack Temp #1", "room.temp");
+    // INITIALIZE OPENCASCADE ENGINE FOR STEP FILES
+    let occtEngine = null;
+    async function getCADEngine() {
+        if (!occtEngine) {
+            occtEngine = await occtimportjs();
+        }
+        return occtEngine;
+    }
 
-    }, undefined, function (error) {
-        console.log("No custom GLB found, loading fallback room...");
+    // Attempt default glTF scene load
+    gltfLoader.load('room.glb', function (gltf) {
+        setupLoadedModel(gltf.scene);
+        create3DSensorNode(0, 2.2, 1.35, "Server Rack Temp #1", "room.temp");
+    }, undefined, function () {
         createMock3DRoom();
     });
 
     function createMock3DRoom() {
-        const floorGeo = new THREE.PlaneGeometry(10, 10);
-        const floorMat = new THREE.MeshStandardMaterial({ color: 0x282a36, side: THREE.DoubleSide });
+        const roomGroup = new THREE.Group();
+        const floorGeo = new THREE.PlaneGeometry(12, 12);
+        const floorMat = new THREE.MeshStandardMaterial({ color: 0x1a1d2e, roughness: 0.4 });
         const floor = new THREE.Mesh(floorGeo, floorMat);
-        floor.rotation.x = Math.PI / 2;
-        scene.add(floor);
-        roomSurfaces.push(floor);
+        floor.rotation.x = -Math.PI / 2;
+        roomGroup.add(floor);
 
-        const boxGeo = new THREE.BoxGeometry(2, 3, 2);
-        const boxMat = new THREE.MeshStandardMaterial({ color: 0x44475a });
+        const grid = new THREE.GridHelper(12, 20, 0x00f2fe, 0x2e354f);
+        grid.position.y = 0.01;
+        roomGroup.add(grid);
+
+        const boxGeo = new THREE.BoxGeometry(2.5, 3.5, 2.5);
+        const boxMat = new THREE.MeshStandardMaterial({ color: 0x252a3e, metalness: 0.5, roughness: 0.2 });
         const rack = new THREE.Mesh(boxGeo, boxMat);
-        rack.position.set(0, 1.5, 0);
-        scene.add(rack);
-        roomSurfaces.push(rack);
+        rack.position.set(0, 1.75, 0);
+        roomGroup.add(rack);
 
-        // --- INITIAL SENSOR PLACEMENT ---
-        create3DSensorNode(0, 2, 1.1, "Server Rack Temp #1", "room.temp");
+        setupLoadedModel(roomGroup);
+        create3DSensorNode(0, 2.2, 1.35, "Server Rack Temp #1", "room.temp");
     }
 
-    // Helper to spawn interactive 3D Sensor spheres
+    // UNIFIED MODEL PROCESSOR FOR GLTF & CAD MODELS
+    function setupLoadedModel(modelObject) {
+        if (currentLoadedModel) {
+            scene.remove(currentLoadedModel);
+        }
+
+        currentLoadedModel = modelObject;
+        roomSurfaces = []; // Clear surface click targets
+
+        modelObject.traverse((child) => {
+            if (child.isMesh) {
+                child.castShadow = true;
+                child.receiveShadow = true;
+                roomSurfaces.push(child);
+            }
+        });
+
+        scene.add(currentLoadedModel);
+    }
+
+    // FILE IMPORTER (PRIMARY: GLTF/GLB)
+    document.getElementById('modelFileInput').addEventListener('change', function (event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const filename = file.name.toLowerCase();
+        const reader = new FileReader();
+
+        // 1. PRIMARY FORMAT: GLTF / GLB 
+        if (filename.endsWith('.glb') || filename.endsWith('.gltf')) {
+            reader.readAsArrayBuffer(file);
+            reader.onload = function (e) {
+                gltfLoader.parse(e.target.result, '', function (gltf) {
+                    const loadedScene = gltf.scene;
+
+                    // Auto-center and normalize scale if the glTF is exceptionally large
+                    const boundingBox = new THREE.Box3().setFromObject(loadedScene);
+                    const size = boundingBox.getSize(new THREE.Vector3());
+                    const maxDim = Math.max(size.x, size.y, size.z);
+                    if (maxDim > 30) {
+                        const scaleFactor = 10 / maxDim;
+                        loadedScene.scale.set(scaleFactor, scaleFactor, scaleFactor);
+                    }
+
+                    setupLoadedModel(loadedScene);
+                }, function (error) {
+                    console.error("glTF parsing error:", error);
+                    alert("Unable to parse glTF/GLB file.");
+                });
+            };
+        }
+        // 2. CAD FORMAT: STEP / STP
+        else if (filename.endsWith('.step') || filename.endsWith('.stp')) {
+            reader.readAsArrayBuffer(file);
+            reader.onload = async function (e) {
+                const buffer = new Uint8Array(e.target.result);
+                
+                try {
+                    const occt = await getCADEngine();
+                    const result = occt.ReadStepFile(buffer);
+
+                    if (!result.success) {
+                        alert("Failed to parse STEP CAD file!");
+                        return;
+                    }
+
+                    const cadGroup = new THREE.Group();
+
+                    for (let meshData of result.meshes) {
+                        const geometry = new THREE.BufferGeometry();
+                        geometry.setAttribute('position', new THREE.Float32BufferAttribute(meshData.attributes.position.array, 3));
+
+                        if (meshData.attributes.normal) {
+                            geometry.setAttribute('normal', new THREE.Float32BufferAttribute(meshData.attributes.normal.array, 3));
+                        } else {
+                            geometry.computeVertexNormals();
+                        }
+
+                        if (meshData.index) {
+                            geometry.setIndex(new THREE.BufferAttribute(meshData.index.array, 1));
+                        }
+
+                        const material = new THREE.MeshStandardMaterial({ 
+                            color: 0x3b4252, 
+                            metalness: 0.5, 
+                            roughness: 0.3 
+                        });
+
+                        const mesh = new THREE.Mesh(geometry, material);
+                        cadGroup.add(mesh);
+                    }
+
+                    const boundingBox = new THREE.Box3().setFromObject(cadGroup);
+                    const size = boundingBox.getSize(new THREE.Vector3());
+                    const maxDim = Math.max(size.x, size.y, size.z);
+                    if (maxDim > 20) {
+                        const scaleFactor = 8 / maxDim;
+                        cadGroup.scale.set(scaleFactor, scaleFactor, scaleFactor);
+                    }
+
+                    setupLoadedModel(cadGroup);
+                } catch (err) {
+                    console.error("CAD Engine Error:", err);
+                    alert("Error processing STEP file.");
+                }
+            };
+        }
+        // 3. CAD FORMAT: STL
+        else if (filename.endsWith('.stl')) {
+            reader.readAsArrayBuffer(file);
+            reader.onload = function (e) {
+                const geometry = stlLoader.parse(e.target.result);
+                geometry.center();
+                geometry.computeVertexNormals();
+
+                const material = new THREE.MeshStandardMaterial({ 
+                    color: 0x3b4252, 
+                    metalness: 0.6, 
+                    roughness: 0.3 
+                });
+                
+                const cadMesh = new THREE.Mesh(geometry, material);
+                const boundingBox = new THREE.Box3().setFromObject(cadMesh);
+                const size = boundingBox.getSize(new THREE.Vector3());
+                const maxDim = Math.max(size.x, size.y, size.z);
+                if (maxDim > 20) {
+                    const scaleFactor = 8 / maxDim;
+                    cadMesh.scale.set(scaleFactor, scaleFactor, scaleFactor);
+                }
+
+                const cadGroup = new THREE.Group();
+                cadGroup.add(cadMesh);
+                setupLoadedModel(cadGroup);
+            };
+        }
+    });
+
+    // SPAWN SENSOR NODE WITH OVERLAY LABEL
     function create3DSensorNode(x, y, z, sensorName, zabbixItemKey) {
-        const sensorGeo = new THREE.SphereGeometry(0.2, 32, 32);
+        const sensorGeo = new THREE.SphereGeometry(0.18, 32, 32);
         const sensorMat = new THREE.MeshStandardMaterial({ 
-            color: 0x50fa7b, 
-            emissive: 0x50fa7b, 
-            emissiveIntensity: 0.6 
+            color: 0x00f2fe, 
+            emissive: 0x00f2fe, 
+            emissiveIntensity: 0.8,
+            roughness: 0.1
         });
         const sensorMesh = new THREE.Mesh(sensorGeo, sensorMat);
         sensorMesh.position.set(x, y, z);
+
+        const labelEl = document.createElement('div');
+        labelEl.className = 'sensor-label';
+        labelEl.innerText = sensorName;
+        labelsContainer.appendChild(labelEl);
         
         sensorMesh.userData = { 
             name: sensorName, 
             itemKey: zabbixItemKey, 
-            isSensor: true 
+            isSensor: true,
+            labelElement: labelEl
         };
         
         scene.add(sensorMesh);
         clickableSensors.push(sensorMesh);
+        updateSensorCount();
     }
 
-    // ==========================================
-    // 4. PLACEMENT MODE TOGGLE
-    // ==========================================
-    const toggleBtn = document.getElementById('togglePlaceBtn');
+    function updateLabels() {
+        const tempV = new THREE.Vector3();
+        clickableSensors.forEach(sensor => {
+            if (sensor.userData.labelElement) {
+                sensor.getWorldPosition(tempV);
+                tempV.y += 0.35;
+                tempV.project(camera);
+
+                const x = (tempV.x *  .5 + .5) * window.innerWidth;
+                const y = (tempV.y * -.5 + .5) * window.innerHeight;
+
+                sensor.userData.labelElement.style.transform = `translate(-50%, -100%) translate(${x}px,${y}px)`;
+                sensor.userData.labelElement.style.opacity = (tempV.z > 1) ? 0 : 1;
+            }
+        });
+    }
+
+    function updateSensorCount() {
+        document.getElementById('statSensorCount').innerText = clickableSensors.length;
+    }
+
+    // CONTROLS & EVENT HANDLERS
+    const toggleAddBtn = document.getElementById('togglePlaceBtn');
+    const toggleDeleteBtn = document.getElementById('toggleDeleteBtn');
     const hintBox = document.getElementById('hintBox');
 
-    toggleBtn.addEventListener('click', () => {
+    toggleAddBtn.addEventListener('click', () => {
+        if (isDeleteMode) disableDeleteMode();
         isPlacementMode = !isPlacementMode;
         
         if (isPlacementMode) {
-            toggleBtn.classList.add('active');
-            toggleBtn.innerText = '❌ Cancel Placement';
+            toggleAddBtn.classList.add('active');
+            toggleAddBtn.innerHTML = '<i class="fa-solid fa-xmark"></i> Cancel';
             container.classList.add('placement-mode');
-            hintBox.innerText = '🎯 CLICK ANYWHERE ON THE ROOM OR RACK TO PLACE SENSOR';
-            hintBox.classList.add('highlight');
+            hintBox.innerHTML = '<i class="fa-solid fa-crosshairs"></i> CLICK ANY GLTF / MODEL SURFACE TO PLACE SENSOR';
+            hintBox.className = 'hint highlight';
         } else {
             disablePlacementMode();
         }
     });
 
+    toggleDeleteBtn.addEventListener('click', () => {
+        if (isPlacementMode) disablePlacementMode();
+        isDeleteMode = !isDeleteMode;
+
+        if (isDeleteMode) {
+            toggleDeleteBtn.classList.add('active');
+            toggleDeleteBtn.innerHTML = '<i class="fa-solid fa-xmark"></i> Cancel';
+            container.classList.add('delete-mode');
+            hintBox.innerHTML = '<i class="fa-solid fa-trash"></i> CLICK ANY SENSOR NODE TO DELETE IT';
+            hintBox.className = 'hint delete-highlight';
+        } else {
+            disableDeleteMode();
+        }
+    });
+
     function disablePlacementMode() {
         isPlacementMode = false;
-        toggleBtn.classList.remove('active');
-        toggleBtn.innerText = '📍 Place Sensor (Click Scene)';
+        toggleAddBtn.classList.remove('active');
+        toggleAddBtn.innerHTML = '<i class="fa-solid fa-plus"></i> Add Sensor';
         container.classList.remove('placement-mode');
-        hintBox.innerText = '🖱️ Left Click + Drag to rotate | Scroll to Zoom | Click a sensor to view live data';
-        hintBox.classList.remove('highlight');
+        resetHint();
     }
 
-    // ==========================================
-    // 5. MOUSE CLICK / RAYCASTING DETECTION
-    // ==========================================
+    function disableDeleteMode() {
+        isDeleteMode = false;
+        toggleDeleteBtn.classList.remove('active');
+        toggleDeleteBtn.innerHTML = '<i class="fa-solid fa-trash"></i> Delete';
+        container.classList.remove('delete-mode');
+        resetHint();
+    }
+
+    function resetHint() {
+        hintBox.innerHTML = '<i class="fa-solid fa-computer-mouse"></i> Left Click + Drag to rotate | Scroll to Zoom | Click sensor to inspect';
+        hintBox.className = 'hint';
+    }
+
+    // RAYCASTING
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
 
     window.addEventListener('click', onPointerClick);
 
     function onPointerClick(event) {
-        // Ignore clicks inside UI panels
         if (event.target.closest('.control-panel') || event.target.closest('.modal')) return;
 
         mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
@@ -352,7 +705,6 @@
 
         raycaster.setFromCamera(mouse, camera);
 
-        // MODE 1: PLACING A SENSOR ON A SURFACE
         if (isPlacementMode) {
             const intersects = raycaster.intersectObjects(roomSurfaces, true);
             if (intersects.length > 0) {
@@ -360,26 +712,27 @@
                 const title = document.getElementById('sensorTitle').value;
                 const key = document.getElementById('itemKey').value;
 
-                // Create the sensor sphere right at click point
                 create3DSensorNode(point.x, point.y, point.z, title, key);
 
-                // Prepare name for next sensor
                 sensorCount++;
                 document.getElementById('sensorTitle').value = `Server Rack Sensor #${sensorCount}`;
-
                 disablePlacementMode();
             }
             return;
         }
 
-        // MODE 2: CLICKING AN EXISTING SENSOR TO OPEN DATA
+        if (isDeleteMode) {
+            const intersects = raycaster.intersectObjects(clickableSensors);
+            if (intersects.length > 0) {
+                promptDeleteSensor(intersects[0].object);
+            }
+            return;
+        }
+
         const intersects = raycaster.intersectObjects(clickableSensors);
         if (intersects.length > 0) {
             const clickedSensor = intersects[0].object;
-            if (clickedSensor.userData.isSensor) {
-                activeSelectedSensor = clickedSensor; // Store reference to clicked sensor
-                openSensorModal(clickedSensor.userData.name, clickedSensor.userData.itemKey);
-            }
+            openSensorModal(clickedSensor.userData.name, clickedSensor.userData.itemKey);
         }
     }
 
@@ -392,13 +745,41 @@
     function animate() {
         requestAnimationFrame(animate);
         controls.update();
+        updateLabels();
         renderer.render(scene, camera);
     }
     animate();
 
-    // ==========================================
-    // 6. DYNAMIC ZABBIX FETCH & MODAL LOGIC
-    // ==========================================
+    // DELETION LOGIC
+    function promptDeleteSensor(sensorMesh) {
+        sensorToDelete = sensorMesh;
+        document.getElementById('confirmDeleteText').innerText = `Are you sure you want to remove "${sensorMesh.userData.name}"?`;
+        document.getElementById('confirmDeleteModal').style.display = 'block';
+    }
+
+    function confirmDeleteSensor() {
+        if (sensorToDelete) {
+            if (sensorToDelete.userData.labelElement) {
+                sensorToDelete.userData.labelElement.remove();
+            }
+            scene.remove(sensorToDelete);
+            if (sensorToDelete.geometry) sensorToDelete.geometry.dispose();
+            if (sensorToDelete.material) sensorToDelete.material.dispose();
+
+            clickableSensors = clickableSensors.filter(sensor => sensor !== sensorToDelete);
+            sensorToDelete = null;
+            updateSensorCount();
+        }
+        closeConfirmModal();
+        disableDeleteMode();
+    }
+
+    function closeConfirmModal() {
+        document.getElementById('confirmDeleteModal').style.display = 'none';
+        sensorToDelete = null;
+    }
+
+    // ZABBIX FETCH
     async function fetchSensorData(itemKey) {
         try {
             const response = await fetch(ZABBIX_URL, {
@@ -429,11 +810,11 @@
 
                 if (lastVal > 30.0) {
                     tempEl.classList.add("alarm");
-                    statusBadge.innerText = "ALARM: HIGH TEMP";
+                    statusBadge.innerText = "HIGH TEMP ALARM";
                     statusBadge.className = "status-badge status-alarm";
                 } else {
                     tempEl.classList.remove("alarm");
-                    statusBadge.innerText = "NORMAL";
+                    statusBadge.innerText = "SYSTEM NORMAL";
                     statusBadge.className = "status-badge status-ok";
                 }
             } else {
@@ -457,25 +838,6 @@
     function closeModal() {
         document.getElementById("sensorModal").style.display = "none";
         if (updateInterval) clearInterval(updateInterval);
-        activeSelectedSensor = null;
-    }
-
-    // Deletes the currently selected sensor from the scene
-    function deleteCurrentSensor() {
-        if (activeSelectedSensor) {
-            // Remove mesh from Three.js scene
-            scene.remove(activeSelectedSensor);
-            
-            // Clean up mesh geometry and material
-            if (activeSelectedSensor.geometry) activeSelectedSensor.geometry.dispose();
-            if (activeSelectedSensor.material) activeSelectedSensor.material.dispose();
-
-            // Filter sensor out of clickable array
-            clickableSensors = clickableSensors.filter(sensor => sensor !== activeSelectedSensor);
-
-            // Close modal & reset state
-            closeModal();
-        }
     }
 </script>
 </body>
