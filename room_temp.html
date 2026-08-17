@@ -443,7 +443,7 @@
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
 
-    // HIGH-INTENSITY 3-POINT STUDIO LIGHTING SYSTEM (Fixes Dark Shapes)
+    // HIGH-INTENSITY 3-POINT STUDIO LIGHTING SYSTEM
     const ambientLight = new THREE.AmbientLight(0xffffff, 1.2); 
     scene.add(ambientLight);
 
@@ -463,13 +463,41 @@
     let clickableSensors = [];
     let roomSurfaces = [];
     let currentLoadedModel = null;
-    let originalMaterials = new Map(); // Stores original material state for quick resets
+    let originalMaterials = new Map();
 
-    // LOAD INITIAL MODEL OR FALLBACK
+    // SENSOR GLB MODEL TEMPLATE VARIABLE
+    let loadedSensorTemplate = null;
+
+    // LOAD INITIAL MODEL & SENSOR.GLB
     const gltfLoader = new THREE.GLTFLoader();
     const stlLoader = new THREE.STLLoader();
 
-    // INITIALIZE OPENCASCADE ENGINE FOR STEP FILES
+    // Preload sensor.glb template
+    gltfLoader.load('sensor.glb', function (gltf) {
+        loadedSensorTemplate = gltf.scene;
+        
+        // Normalize sensor dimensions so it attaches nicely
+        const box = new THREE.Box3().setFromObject(loadedSensorTemplate);
+        const size = box.getSize(new THREE.Vector3());
+        const maxDim = Math.max(size.x, size.y, size.z);
+        
+        // Standardize sensor size to 0.3 units width/height
+        if (maxDim > 0) {
+            const targetScale = 0.3 / maxDim;
+            loadedSensorTemplate.scale.set(targetScale, targetScale, targetScale);
+        }
+        
+        loadedSensorTemplate.traverse((child) => {
+            if (child.isMesh) {
+                child.castShadow = true;
+                child.receiveShadow = true;
+            }
+        });
+    }, undefined, function (error) {
+        console.warn("sensor.glb not found or failed to load. Defaulting to fallback 3D shape.");
+    });
+
+    // Initialize OpenCASCADE for STEP files
     let occtEngine = null;
     async function getCADEngine() {
         if (!occtEngine) {
@@ -478,10 +506,10 @@
         return occtEngine;
     }
 
-    // Attempt default glTF scene load
+    // Load default room scene
     gltfLoader.load('room.glb', function (gltf) {
         setupLoadedModel(gltf.scene);
-        create3DSensorNode(0, 2.2, 1.35, "Server Rack Temp #1", "room.temp");
+        create3DSensorNode(new THREE.Vector3(0, 2.2, 1.35), new THREE.Vector3(0, 1, 0), "Server Rack Temp #1", "room.temp");
     }, undefined, function () {
         createMock3DRoom();
     });
@@ -505,10 +533,9 @@
         roomGroup.add(rack);
 
         setupLoadedModel(roomGroup);
-        create3DSensorNode(0, 2.2, 1.35, "Server Rack Temp #1", "room.temp");
+        create3DSensorNode(new THREE.Vector3(0, 2.2, 1.35), new THREE.Vector3(0, 0, 1), "Server Rack Temp #1", "room.temp");
     }
 
-    // UNIFIED MODEL PROCESSOR WITH DARKNESS/SURFACE CORRECTION
     function setupLoadedModel(modelObject) {
         if (currentLoadedModel) {
             scene.remove(currentLoadedModel);
@@ -523,13 +550,12 @@
                 child.castShadow = true;
                 child.receiveShadow = true;
 
-                // BRIGHTNESS & DARKNESS FIX: Soften pitch black metallic surfaces and enforce double-sided faces
                 if (child.material) {
                     originalMaterials.set(child, child.material.clone());
                     
-                    child.material.side = THREE.DoubleSide; // Prevents inside-out dark faces
+                    child.material.side = THREE.DoubleSide;
                     if (child.material.metalness !== undefined && child.material.metalness > 0.8) {
-                        child.material.metalness = 0.3; // Prevent total light absorption
+                        child.material.metalness = 0.3;
                     }
                     if (child.material.roughness !== undefined && child.material.roughness < 0.1) {
                         child.material.roughness = 0.4;
@@ -567,9 +593,6 @@
                     }
 
                     setupLoadedModel(loadedScene);
-                }, function (error) {
-                    console.error("glTF parsing error:", error);
-                    alert("Unable to parse glTF/GLB file.");
                 });
             };
         }
@@ -625,7 +648,6 @@
                     setupLoadedModel(cadGroup);
                 } catch (err) {
                     console.error("CAD Engine Error:", err);
-                    alert("Error processing STEP file.");
                 }
             };
         }
@@ -659,7 +681,7 @@
         }
     });
 
-    // 3D SHAPE VISUAL MANIPULATION TOOLS
+    // 3D VISUAL TOOLS
     let isWireframe = false;
     let isAutoRotating = false;
 
@@ -728,32 +750,45 @@
         }
     });
 
-    // SPAWN SENSOR NODE WITH OVERLAY LABEL
-    function create3DSensorNode(x, y, z, sensorName, zabbixItemKey) {
-        const sensorGeo = new THREE.SphereGeometry(0.18, 32, 32);
-        const sensorMat = new THREE.MeshStandardMaterial({ 
-            color: 0x00f2fe, 
-            emissive: 0x00f2fe, 
-            emissiveIntensity: 0.8,
-            roughness: 0.1
-        });
-        const sensorMesh = new THREE.Mesh(sensorGeo, sensorMat);
-        sensorMesh.position.set(x, y, z);
+    // SPAWN 3D SENSOR NODE WITH ANGLE / NORMAL SURFACE ORIENTATION
+    function create3DSensorNode(point, normal, sensorName, zabbixItemKey) {
+        let sensorObject;
 
+        if (loadedSensorTemplate) {
+            sensorObject = loadedSensorTemplate.clone(true);
+        } else {
+            // Fallback object if sensor.glb is missing
+            const geo = new THREE.CylinderGeometry(0.12, 0.12, 0.08, 16);
+            const mat = new THREE.MeshStandardMaterial({ color: 0x00f2fe, emissive: 0x00f2fe, emissiveIntensity: 0.5 });
+            sensorObject = new THREE.Mesh(geo, mat);
+        }
+
+        // 1. Set Position
+        sensorObject.position.copy(point);
+
+        // 2. Rotate Sensor to Align Perfectly with the Surface Normal
+        const upVector = new THREE.Vector3(0, 1, 0); // Default default-up vector
+        const quaternion = new THREE.Quaternion();
+        
+        // Calculate rotational difference between default "up" and clicked surface direction
+        quaternion.setFromUnitVectors(upVector, normal.clone().normalize());
+        sensorObject.quaternion.copy(quaternion);
+
+        // 3. Attach UI Metadata
         const labelEl = document.createElement('div');
         labelEl.className = 'sensor-label';
         labelEl.innerText = sensorName;
         labelsContainer.appendChild(labelEl);
         
-        sensorMesh.userData = { 
+        sensorObject.userData = { 
             name: sensorName, 
             itemKey: zabbixItemKey, 
             isSensor: true,
             labelElement: labelEl
         };
         
-        scene.add(sensorMesh);
-        clickableSensors.push(sensorMesh);
+        scene.add(sensorObject);
+        clickableSensors.push(sensorObject);
         updateSensorCount();
     }
 
@@ -762,7 +797,7 @@
         clickableSensors.forEach(sensor => {
             if (sensor.userData.labelElement) {
                 sensor.getWorldPosition(tempV);
-                tempV.y += 0.35;
+                tempV.y += 0.25;
                 tempV.project(camera);
 
                 const x = (tempV.x *  .5 + .5) * window.innerWidth;
@@ -791,7 +826,7 @@
             toggleAddBtn.classList.add('active');
             toggleAddBtn.innerHTML = '<i class="fa-solid fa-xmark"></i> Cancel';
             container.classList.add('placement-mode');
-            hintBox.innerHTML = '<i class="fa-solid fa-crosshairs"></i> CLICK ANY MODEL SURFACE TO PLACE SENSOR';
+            hintBox.innerHTML = '<i class="fa-solid fa-crosshairs"></i> CLICK ANY MODEL SURFACE TO ATTACH SENSOR';
             hintBox.className = 'hint highlight';
         } else {
             disablePlacementMode();
@@ -806,7 +841,7 @@
             toggleDeleteBtn.classList.add('active');
             toggleDeleteBtn.innerHTML = '<i class="fa-solid fa-xmark"></i> Cancel';
             container.classList.add('delete-mode');
-            hintBox.innerHTML = '<i class="fa-solid fa-trash"></i> CLICK ANY SENSOR NODE TO DELETE IT';
+            hintBox.innerHTML = '<i class="fa-solid fa-trash"></i> CLICK ANY SENSOR MODEL TO DELETE IT';
             hintBox.className = 'hint delete-highlight';
         } else {
             disableDeleteMode();
@@ -834,7 +869,7 @@
         hintBox.className = 'hint';
     }
 
-    // RAYCASTING
+    // RAYCASTING WITH SURFACE NORMAL VECTOR CALCULATION
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
 
@@ -851,11 +886,17 @@
         if (isPlacementMode) {
             const intersects = raycaster.intersectObjects(roomSurfaces, true);
             if (intersects.length > 0) {
-                const point = intersects[0].point;
+                const hit = intersects[0];
+                const point = hit.point;
+                
+                // Extract Surface Normal Direction (Convert from local to world orientation)
+                const normalMatrix = new THREE.Matrix3().getNormalMatrix(hit.object.matrixWorld);
+                const worldNormal = hit.face.normal.clone().applyMatrix3(normalMatrix).normalize();
+
                 const title = document.getElementById('sensorTitle').value;
                 const key = document.getElementById('itemKey').value;
 
-                create3DSensorNode(point.x, point.y, point.z, title, key);
+                create3DSensorNode(point, worldNormal, title, key);
 
                 sensorCount++;
                 document.getElementById('sensorTitle').value = `Server Rack Sensor #${sensorCount}`;
@@ -865,17 +906,25 @@
         }
 
         if (isDeleteMode) {
-            const intersects = raycaster.intersectObjects(clickableSensors);
+            const intersects = raycaster.intersectObjects(clickableSensors, true);
             if (intersects.length > 0) {
-                promptDeleteSensor(intersects[0].object);
+                // Find root group/mesh inside clickableSensors array
+                let topObject = intersects[0].object;
+                while (topObject.parent && !clickableSensors.includes(topObject)) {
+                    topObject = topObject.parent;
+                }
+                promptDeleteSensor(topObject);
             }
             return;
         }
 
-        const intersects = raycaster.intersectObjects(clickableSensors);
+        const intersects = raycaster.intersectObjects(clickableSensors, true);
         if (intersects.length > 0) {
-            const clickedSensor = intersects[0].object;
-            openSensorModal(clickedSensor.userData.name, clickedSensor.userData.itemKey);
+            let topObject = intersects[0].object;
+            while (topObject.parent && !clickableSensors.includes(topObject)) {
+                topObject = topObject.parent;
+            }
+            openSensorModal(topObject.userData.name, topObject.userData.itemKey);
         }
     }
 
@@ -894,9 +943,9 @@
     animate();
 
     // DELETION LOGIC
-    function promptDeleteSensor(sensorMesh) {
-        sensorToDelete = sensorMesh;
-        document.getElementById('confirmDeleteText').innerText = `Are you sure you want to remove "${sensorMesh.userData.name}"?`;
+    function promptDeleteSensor(sensorObj) {
+        sensorToDelete = sensorObj;
+        document.getElementById('confirmDeleteText').innerText = `Are you sure you want to remove "${sensorObj.userData.name}"?`;
         document.getElementById('confirmDeleteModal').style.display = 'block';
     }
 
@@ -906,8 +955,6 @@
                 sensorToDelete.userData.labelElement.remove();
             }
             scene.remove(sensorToDelete);
-            if (sensorToDelete.geometry) sensorToDelete.geometry.dispose();
-            if (sensorToDelete.material) sensorToDelete.material.dispose();
 
             clickableSensors = clickableSensors.filter(sensor => sensor !== sensorToDelete);
             sensorToDelete = null;
@@ -922,7 +969,7 @@
         sensorToDelete = null;
     }
 
-    // ZABBIX FETCH
+    // ZABBIX API FETCH
     async function fetchSensorData(itemKey) {
         try {
             const response = await fetch(ZABBIX_URL, {
