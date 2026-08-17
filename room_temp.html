@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Digital Twin - Zabbix Sensor Monitoring (glTF/GLB Focus)</title>
+    <title>3D Digital Twin - Enhanced Telemetry & Visual Studio</title>
     <!-- Font Awesome Icons & Google Font -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
             --bg-dark: #0f111a;
-            --panel-bg: rgba(22, 27, 38, 0.75);
+            --panel-bg: rgba(22, 27, 38, 0.85);
             --panel-border: rgba(98, 114, 164, 0.3);
             --accent-cyan: #00f2fe;
             --accent-purple: #7928ca;
@@ -28,7 +28,7 @@
             overflow: hidden;
         }
 
-        /* Top Navigation Header & Status Bar */
+        /* Top Navigation Header */
         header {
             position: absolute;
             top: 20px;
@@ -103,49 +103,64 @@
         #canvas-container.placement-mode { cursor: crosshair !important; }
         #canvas-container.delete-mode { cursor: pointer !important; }
 
-        /* Control Panel */
-        .control-panel {
+        /* Floating Side Panels */
+        .panel-stack {
             position: absolute;
-            top: 100px;
+            top: 90px;
             right: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            z-index: 10;
+            max-height: calc(100vh - 120px);
+            overflow-y: auto;
+        }
+
+        .control-panel {
             background: var(--panel-bg);
             backdrop-filter: blur(16px);
-            padding: 20px;
+            padding: 18px;
             border-radius: 16px;
             border: 1px solid var(--panel-border);
             box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
-            z-index: 10;
             width: 280px;
         }
 
         .control-panel h3 { 
-            margin: 0 0 15px 0; 
-            font-size: 1rem; 
+            margin: 0 0 12px 0; 
+            font-size: 0.95rem; 
             color: var(--text-main);
             display: flex;
             align-items: center;
             gap: 8px;
             border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-            padding-bottom: 10px;
+            padding-bottom: 8px;
         }
 
-        .form-group { margin-bottom: 12px; text-align: left; }
-        .form-group label { display: block; font-size: 0.75rem; color: var(--text-muted); margin-bottom: 5px; font-weight: 600; }
-        .form-group input { 
+        .form-group { margin-bottom: 10px; text-align: left; }
+        .form-group label { display: block; font-size: 0.72rem; color: var(--text-muted); margin-bottom: 4px; font-weight: 600; }
+        .form-group input[type="text"], .form-group input[type="color"] { 
             width: 100%; 
-            padding: 9px 12px; 
+            padding: 8px 10px; 
             background: rgba(15, 17, 26, 0.7); 
             border: 1px solid var(--panel-border); 
             color: var(--text-main); 
             border-radius: 8px; 
             box-sizing: border-box;
-            font-size: 0.85rem;
+            font-size: 0.82rem;
             transition: all 0.3s ease;
         }
-        .form-group input:focus {
-            outline: none;
-            border-color: var(--accent-cyan);
-            box-shadow: 0 0 10px rgba(0, 242, 254, 0.3);
+        .form-group input[type="color"] { height: 36px; cursor: pointer; padding: 2px; }
+
+        .slider-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .slider-group input[type="range"] {
+            flex: 1;
+            accent-color: var(--accent-cyan);
+            cursor: pointer;
         }
 
         /* File Upload Input styling */
@@ -168,16 +183,16 @@
         }
         .file-upload-btn:hover { background: rgba(0, 242, 254, 0.2); }
 
-        .button-group { display: flex; gap: 10px; margin-top: 15px; }
+        .button-group { display: flex; gap: 8px; margin-top: 12px; }
 
         .btn-panel {
             flex: 1;
-            padding: 10px;
+            padding: 9px;
             border: none;
             border-radius: 8px;
             cursor: pointer;
             font-weight: 600;
-            font-size: 0.8rem;
+            font-size: 0.78rem;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -192,6 +207,10 @@
         .btn-delete { background: rgba(255, 0, 85, 0.15); color: #ff0055; border: 1px solid rgba(255, 0, 85, 0.4); }
         .btn-delete:hover { background: rgba(255, 0, 85, 0.3); }
         .btn-delete.active { background: #ffaa00; color: #0f111a; border-color: #ffaa00; animation: pulse 1.5s infinite; }
+
+        .btn-utility { background: rgba(255, 255, 255, 0.08); color: var(--text-main); border: 1px solid var(--panel-border); }
+        .btn-utility:hover { background: rgba(255, 255, 255, 0.18); }
+        .btn-utility.active { background: var(--accent-cyan); color: #0f111a; font-weight: 700; }
 
         /* Floating 3D Node Labels */
         .sensor-label {
@@ -309,31 +328,60 @@
         </div>
     </header>
 
-    <!-- Control Panel -->
-    <div class="control-panel">
-        <h3><i class="fa-solid fa-layer-group"></i> Model & Sensor Controls</h3>
+    <!-- Floating UI Panels -->
+    <div class="panel-stack">
+        <!-- Panel 1: Model & Sensor Setup -->
+        <div class="control-panel">
+            <h3><i class="fa-solid fa-layer-group"></i> Model & Sensors</h3>
 
-        <!-- Model File Selector -->
-        <div class="form-group">
-            <label>Load Custom 3D Model (.GLTF / .GLB)</label>
-            <label for="modelFileInput" class="file-upload-btn">
-                <i class="fa-solid fa-file-import"></i> Upload .GLB / .GLTF / .STEP
-            </label>
-            <input type="file" id="modelFileInput" accept=".glb,.gltf,.stl,.step,.stp" style="display: none;">
+            <div class="form-group">
+                <label>Load 3D Model (.GLB / .GLTF / .STEP)</label>
+                <label for="modelFileInput" class="file-upload-btn">
+                    <i class="fa-solid fa-file-import"></i> Upload 3D Shape
+                </label>
+                <input type="file" id="modelFileInput" accept=".glb,.gltf,.stl,.step,.stp" style="display: none;">
+            </div>
+
+            <div class="form-group">
+                <label for="sensorTitle">Sensor Display Name</label>
+                <input type="text" id="sensorTitle" value="Server Rack Sensor #1">
+            </div>
+            <div class="form-group">
+                <label for="itemKey">Zabbix Item Key</label>
+                <input type="text" id="itemKey" value="room.temp">
+            </div>
+            
+            <div class="button-group">
+                <button id="togglePlaceBtn" class="btn-panel btn-add"><i class="fa-solid fa-plus"></i> Add Sensor</button>
+                <button id="toggleDeleteBtn" class="btn-panel btn-delete"><i class="fa-solid fa-trash"></i> Delete</button>
+            </div>
         </div>
 
-        <div class="form-group">
-            <label for="sensorTitle">Sensor Display Name</label>
-            <input type="text" id="sensorTitle" value="Server Rack Sensor #1">
-        </div>
-        <div class="form-group">
-            <label for="itemKey">Zabbix Item Key</label>
-            <input type="text" id="itemKey" value="room.temp">
-        </div>
-        
-        <div class="button-group">
-            <button id="togglePlaceBtn" class="btn-panel btn-add"><i class="fa-solid fa-plus"></i> Add Sensor</button>
-            <button id="toggleDeleteBtn" class="btn-panel btn-delete"><i class="fa-solid fa-trash"></i> Delete</button>
+        <!-- Panel 2: 3D Shape Visual Effects -->
+        <div class="control-panel">
+            <h3><i class="fa-solid fa-wand-magic-sparkles"></i> 3D Shape Manipulator</h3>
+
+            <div class="button-group">
+                <button id="wireframeToggleBtn" class="btn-panel btn-utility"><i class="fa-solid fa-border-all"></i> Wireframe</button>
+                <button id="autoRotateToggleBtn" class="btn-panel btn-utility"><i class="fa-solid fa-rotate"></i> Spin Shape</button>
+            </div>
+
+            <div class="form-group" style="margin-top: 10px;">
+                <label>X-Ray Opacity (Transparency)</label>
+                <div class="slider-group">
+                    <input type="range" id="opacitySlider" min="0.1" max="1.0" step="0.05" value="1.0">
+                    <span id="opacityVal" style="font-size: 0.75rem; color: var(--accent-cyan);">100%</span>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Override Material Color</label>
+                <input type="color" id="modelColorPicker" value="#3b4252">
+            </div>
+
+            <div class="button-group">
+                <button id="resetMaterialBtn" class="btn-panel btn-utility" style="width: 100%;"><i class="fa-solid fa-arrow-rotate-left"></i> Reset Visuals</button>
+            </div>
         </div>
     </div>
 
@@ -387,23 +435,35 @@
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.shadowMap.enabled = true;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.2;
     container.appendChild(renderer.domElement);
 
     const controls = new THREE.OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
 
-    // LIGHTING
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+    // HIGH-INTENSITY 3-POINT STUDIO LIGHTING SYSTEM (Fixes Dark Shapes)
+    const ambientLight = new THREE.AmbientLight(0xffffff, 1.2); 
     scene.add(ambientLight);
 
-    const dirLight = new THREE.DirectionalLight(0x00f2fe, 1.0);
-    dirLight.position.set(10, 20, 10);
-    scene.add(dirLight);
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x333344, 1.0);
+    hemiLight.position.set(0, 20, 0);
+    scene.add(hemiLight);
+
+    const mainDirLight = new THREE.DirectionalLight(0xffffff, 1.5);
+    mainDirLight.position.set(10, 20, 10);
+    mainDirLight.castShadow = true;
+    scene.add(mainDirLight);
+
+    const fillLight = new THREE.DirectionalLight(0x00f2fe, 0.8);
+    fillLight.position.set(-10, 10, -10);
+    scene.add(fillLight);
 
     let clickableSensors = [];
     let roomSurfaces = [];
     let currentLoadedModel = null;
+    let originalMaterials = new Map(); // Stores original material state for quick resets
 
     // LOAD INITIAL MODEL OR FALLBACK
     const gltfLoader = new THREE.GLTFLoader();
@@ -439,7 +499,7 @@
         roomGroup.add(grid);
 
         const boxGeo = new THREE.BoxGeometry(2.5, 3.5, 2.5);
-        const boxMat = new THREE.MeshStandardMaterial({ color: 0x252a3e, metalness: 0.5, roughness: 0.2 });
+        const boxMat = new THREE.MeshStandardMaterial({ color: 0x252a3e, metalness: 0.3, roughness: 0.4 });
         const rack = new THREE.Mesh(boxGeo, boxMat);
         rack.position.set(0, 1.75, 0);
         roomGroup.add(rack);
@@ -448,19 +508,35 @@
         create3DSensorNode(0, 2.2, 1.35, "Server Rack Temp #1", "room.temp");
     }
 
-    // UNIFIED MODEL PROCESSOR FOR GLTF & CAD MODELS
+    // UNIFIED MODEL PROCESSOR WITH DARKNESS/SURFACE CORRECTION
     function setupLoadedModel(modelObject) {
         if (currentLoadedModel) {
             scene.remove(currentLoadedModel);
         }
 
         currentLoadedModel = modelObject;
-        roomSurfaces = []; // Clear surface click targets
+        roomSurfaces = []; 
+        originalMaterials.clear();
 
         modelObject.traverse((child) => {
             if (child.isMesh) {
                 child.castShadow = true;
                 child.receiveShadow = true;
+
+                // BRIGHTNESS & DARKNESS FIX: Soften pitch black metallic surfaces and enforce double-sided faces
+                if (child.material) {
+                    originalMaterials.set(child, child.material.clone());
+                    
+                    child.material.side = THREE.DoubleSide; // Prevents inside-out dark faces
+                    if (child.material.metalness !== undefined && child.material.metalness > 0.8) {
+                        child.material.metalness = 0.3; // Prevent total light absorption
+                    }
+                    if (child.material.roughness !== undefined && child.material.roughness < 0.1) {
+                        child.material.roughness = 0.4;
+                    }
+                    child.material.needsUpdate = true;
+                }
+
                 roomSurfaces.push(child);
             }
         });
@@ -468,7 +544,7 @@
         scene.add(currentLoadedModel);
     }
 
-    // FILE IMPORTER (PRIMARY: GLTF/GLB)
+    // FILE IMPORTER (GLTF / CAD / STEP / STL)
     document.getElementById('modelFileInput').addEventListener('change', function (event) {
         const file = event.target.files[0];
         if (!file) return;
@@ -476,14 +552,12 @@
         const filename = file.name.toLowerCase();
         const reader = new FileReader();
 
-        // 1. PRIMARY FORMAT: GLTF / GLB 
         if (filename.endsWith('.glb') || filename.endsWith('.gltf')) {
             reader.readAsArrayBuffer(file);
             reader.onload = function (e) {
                 gltfLoader.parse(e.target.result, '', function (gltf) {
                     const loadedScene = gltf.scene;
 
-                    // Auto-center and normalize scale if the glTF is exceptionally large
                     const boundingBox = new THREE.Box3().setFromObject(loadedScene);
                     const size = boundingBox.getSize(new THREE.Vector3());
                     const maxDim = Math.max(size.x, size.y, size.z);
@@ -499,7 +573,6 @@
                 });
             };
         }
-        // 2. CAD FORMAT: STEP / STP
         else if (filename.endsWith('.step') || filename.endsWith('.stp')) {
             reader.readAsArrayBuffer(file);
             reader.onload = async function (e) {
@@ -531,9 +604,10 @@
                         }
 
                         const material = new THREE.MeshStandardMaterial({ 
-                            color: 0x3b4252, 
-                            metalness: 0.5, 
-                            roughness: 0.3 
+                            color: 0x505a6e, 
+                            metalness: 0.3, 
+                            roughness: 0.4,
+                            side: THREE.DoubleSide
                         });
 
                         const mesh = new THREE.Mesh(geometry, material);
@@ -555,7 +629,6 @@
                 }
             };
         }
-        // 3. CAD FORMAT: STL
         else if (filename.endsWith('.stl')) {
             reader.readAsArrayBuffer(file);
             reader.onload = function (e) {
@@ -564,9 +637,10 @@
                 geometry.computeVertexNormals();
 
                 const material = new THREE.MeshStandardMaterial({ 
-                    color: 0x3b4252, 
-                    metalness: 0.6, 
-                    roughness: 0.3 
+                    color: 0x505a6e, 
+                    metalness: 0.4, 
+                    roughness: 0.3,
+                    side: THREE.DoubleSide
                 });
                 
                 const cadMesh = new THREE.Mesh(geometry, material);
@@ -582,6 +656,75 @@
                 cadGroup.add(cadMesh);
                 setupLoadedModel(cadGroup);
             };
+        }
+    });
+
+    // 3D SHAPE VISUAL MANIPULATION TOOLS
+    let isWireframe = false;
+    let isAutoRotating = false;
+
+    document.getElementById('wireframeToggleBtn').addEventListener('click', function () {
+        isWireframe = !isWireframe;
+        this.classList.toggle('active', isWireframe);
+
+        if (currentLoadedModel) {
+            currentLoadedModel.traverse((child) => {
+                if (child.isMesh && child.material) {
+                    child.material.wireframe = isWireframe;
+                }
+            });
+        }
+    });
+
+    document.getElementById('autoRotateToggleBtn').addEventListener('click', function () {
+        isAutoRotating = !isAutoRotating;
+        this.classList.toggle('active', isAutoRotating);
+        controls.autoRotate = isAutoRotating;
+        controls.autoRotateSpeed = 2.0;
+    });
+
+    document.getElementById('opacitySlider').addEventListener('input', function (e) {
+        const opacityVal = parseFloat(e.target.value);
+        document.getElementById('opacityVal').innerText = `${Math.round(opacityVal * 100)}%`;
+
+        if (currentLoadedModel) {
+            currentLoadedModel.traverse((child) => {
+                if (child.isMesh && child.material) {
+                    child.material.transparent = opacityVal < 1.0;
+                    child.material.opacity = opacityVal;
+                }
+            });
+        }
+    });
+
+    document.getElementById('modelColorPicker').addEventListener('input', function (e) {
+        const hexColor = e.target.value;
+        if (currentLoadedModel) {
+            currentLoadedModel.traverse((child) => {
+                if (child.isMesh && child.material) {
+                    child.material.color.set(hexColor);
+                }
+            });
+        }
+    });
+
+    document.getElementById('resetMaterialBtn').addEventListener('click', function () {
+        isWireframe = false;
+        isAutoRotating = false;
+        controls.autoRotate = false;
+
+        document.getElementById('wireframeToggleBtn').classList.remove('active');
+        document.getElementById('autoRotateToggleBtn').classList.remove('active');
+        document.getElementById('opacitySlider').value = 1.0;
+        document.getElementById('opacityVal').innerText = "100%";
+
+        if (currentLoadedModel && originalMaterials.size > 0) {
+            currentLoadedModel.traverse((child) => {
+                if (child.isMesh && originalMaterials.has(child)) {
+                    child.material = originalMaterials.get(child).clone();
+                    child.material.side = THREE.DoubleSide;
+                }
+            });
         }
     });
 
@@ -648,7 +791,7 @@
             toggleAddBtn.classList.add('active');
             toggleAddBtn.innerHTML = '<i class="fa-solid fa-xmark"></i> Cancel';
             container.classList.add('placement-mode');
-            hintBox.innerHTML = '<i class="fa-solid fa-crosshairs"></i> CLICK ANY GLTF / MODEL SURFACE TO PLACE SENSOR';
+            hintBox.innerHTML = '<i class="fa-solid fa-crosshairs"></i> CLICK ANY MODEL SURFACE TO PLACE SENSOR';
             hintBox.className = 'hint highlight';
         } else {
             disablePlacementMode();
@@ -698,7 +841,7 @@
     window.addEventListener('click', onPointerClick);
 
     function onPointerClick(event) {
-        if (event.target.closest('.control-panel') || event.target.closest('.modal')) return;
+        if (event.target.closest('.panel-stack') || event.target.closest('.modal')) return;
 
         mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
         mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
