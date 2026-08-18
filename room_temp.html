@@ -10,7 +10,7 @@
     <style>
         :root {
             --bg-dark: #0f111a;
-            --panel-bg: rgba(22, 27, 38, 0.85);
+            --panel-bg: rgba(22, 27, 38, 0.92);
             --panel-border: rgba(98, 114, 164, 0.3);
             --accent-cyan: #00f2fe;
             --accent-purple: #7928ca;
@@ -105,27 +105,65 @@
         #canvas-container.placement-mode { cursor: crosshair !important; }
         #canvas-container.delete-mode { cursor: pointer !important; }
 
-        /* Floating Side Panels */
-        .panel-stack {
+        /* --- COLLAPSIBLE SIDEBAR DRAWER PANEL --- */
+        #sidebar {
+            position: fixed;
+            top: 0;
+            right: 0;
+            width: 320px;
+            height: 100vh;
+            background: var(--panel-bg);
+            backdrop-filter: blur(16px);
+            border-left: 1px solid var(--panel-border);
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 1000;
+            padding: 20px;
+            box-shadow: -5px 0 25px rgba(0, 0, 0, 0.5);
+        }
+
+        /* Hidden State (Translates Drawer off-screen to the right) */
+        #sidebar.collapsed {
+            transform: translateX(100%);
+        }
+
+        /* Minimalist Rounded Tab Handle (Matching the Reference Image) */
+        #sidebarToggle {
             position: absolute;
-            top: 90px;
-            right: 20px;
+            left: -18px;
+            top: 40%;
+            transform: translateY(-50%);
+            width: 18px;
+            height: 110px;
+            background: rgba(35, 43, 56, 0.85);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-right: none;
+            border-radius: 10px 0 0 10px;
+            cursor: pointer;
+            outline: none;
+            box-shadow: -3px 0 8px rgba(0, 0, 0, 0.4);
+            transition: background 0.2s, width 0.2s, left 0.2s;
+        }
+
+        #sidebarToggle:hover {
+            background: rgba(55, 68, 88, 0.95);
+            width: 22px;
+            left: -22px;
+        }
+
+        .panel-stack {
             display: flex;
             flex-direction: column;
             gap: 15px;
-            z-index: 10;
-            max-height: calc(100vh - 120px);
+            height: 100%;
             overflow-y: auto;
+            padding-right: 5px;
         }
 
         .control-panel {
-            background: var(--panel-bg);
-            backdrop-filter: blur(16px);
-            padding: 18px;
-            border-radius: 16px;
+            background: rgba(15, 17, 26, 0.6);
+            padding: 16px;
+            border-radius: 12px;
             border: 1px solid var(--panel-border);
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
-            width: 280px;
         }
 
         .control-panel h3 { 
@@ -253,7 +291,7 @@
             border: 1px solid var(--panel-border);
             width: 320px;
             text-align: center;
-            z-index: 100;
+            z-index: 2000;
             animation: fadeIn 0.3s ease-out;
         }
 
@@ -310,6 +348,7 @@
             align-items: center;
             gap: 10px;
             transition: all 0.3s ease;
+            z-index: 10;
         }
         .hint.highlight { border-color: var(--accent-cyan); color: var(--accent-cyan); box-shadow: 0 0 15px rgba(0, 242, 254, 0.3); }
         .hint.delete-highlight { border-color: var(--accent-red); color: var(--accent-red); box-shadow: 0 0 15px rgba(255, 0, 85, 0.3); }
@@ -342,59 +381,64 @@
         </div>
     </header>
 
-    <!-- Floating UI Panels -->
-    <div class="panel-stack">
-        <!-- Panel 1: Model & Sensor Setup -->
-        <div class="control-panel">
-            <h3><i class="fa-solid fa-layer-group"></i> Model & Sensors</h3>
+    <!-- Collapsible Sidebar Drawer -->
+    <div id="sidebar" class="sidebar collapsed">
+        <!-- Minimalist Tab Handle -->
+        <button id="sidebarToggle" onclick="toggleSidebar()" title="Toggle Control Menu"></button>
 
-            <div class="form-group">
-                <label>Load 3D Model (.GLB / .GLTF / .STEP)</label>
-                <label for="modelFileInput" class="file-upload-btn">
-                    <i class="fa-solid fa-file-import"></i> Upload 3D Shape
-                </label>
-                <input type="file" id="modelFileInput" accept=".glb,.gltf,.stl,.step,.stp" style="display: none;">
-            </div>
+        <div class="panel-stack">
+            <!-- Panel 1: Model & Sensor Setup -->
+            <div class="control-panel">
+                <h3><i class="fa-solid fa-layer-group"></i> Model & Sensors</h3>
 
-            <div class="form-group">
-                <label for="sensorTitle">Sensor Display Name</label>
-                <input type="text" id="sensorTitle" value="Server Rack Sensor #1">
-            </div>
-            <div class="form-group">
-                <label for="itemKey">Zabbix Item Key</label>
-                <input type="text" id="itemKey" value="room.temp">
-            </div>
-            
-            <div class="button-group">
-                <button id="togglePlaceBtn" class="btn-panel btn-add"><i class="fa-solid fa-plus"></i> Add Sensor</button>
-                <button id="toggleDeleteBtn" class="btn-panel btn-delete"><i class="fa-solid fa-trash"></i> Delete</button>
-            </div>
-        </div>
+                <div class="form-group">
+                    <label>Load 3D Model (.GLB / .GLTF / .STEP)</label>
+                    <label for="modelFileInput" class="file-upload-btn">
+                        <i class="fa-solid fa-file-import"></i> Upload 3D Shape
+                    </label>
+                    <input type="file" id="modelFileInput" accept=".glb,.gltf,.stl,.step,.stp" style="display: none;">
+                </div>
 
-        <!-- Panel 2: 3D Shape Visual Effects -->
-        <div class="control-panel">
-            <h3><i class="fa-solid fa-wand-magic-sparkles"></i> 3D Shape Manipulator</h3>
-
-            <div class="button-group">
-                <button id="wireframeToggleBtn" class="btn-panel btn-utility"><i class="fa-solid fa-border-all"></i> Wireframe</button>
-                <button id="autoRotateToggleBtn" class="btn-panel btn-utility"><i class="fa-solid fa-rotate"></i> Spin Shape</button>
-            </div>
-
-            <div class="form-group" style="margin-top: 10px;">
-                <label>X-Ray Opacity (Transparency)</label>
-                <div class="slider-group">
-                    <input type="range" id="opacitySlider" min="0.1" max="1.0" step="0.05" value="1.0">
-                    <span id="opacityVal" style="font-size: 0.75rem; color: var(--accent-cyan);">100%</span>
+                <div class="form-group">
+                    <label for="sensorTitle">Sensor Display Name</label>
+                    <input type="text" id="sensorTitle" value="Server Rack Sensor #1">
+                </div>
+                <div class="form-group">
+                    <label for="itemKey">Zabbix Item Key</label>
+                    <input type="text" id="itemKey" value="room.temp">
+                </div>
+                
+                <div class="button-group">
+                    <button id="togglePlaceBtn" class="btn-panel btn-add"><i class="fa-solid fa-plus"></i> Add Sensor</button>
+                    <button id="toggleDeleteBtn" class="btn-panel btn-delete"><i class="fa-solid fa-trash"></i> Delete</button>
                 </div>
             </div>
 
-            <div class="form-group">
-                <label>Override Material Color</label>
-                <input type="color" id="modelColorPicker" value="#3b4252">
-            </div>
+            <!-- Panel 2: 3D Shape Visual Effects -->
+            <div class="control-panel">
+                <h3><i class="fa-solid fa-wand-magic-sparkles"></i> 3D Shape Manipulator</h3>
 
-            <div class="button-group">
-                <button id="resetMaterialBtn" class="btn-panel btn-utility" style="width: 100%;"><i class="fa-solid fa-arrow-rotate-left"></i> Reset Visuals</button>
+                <div class="button-group">
+                    <button id="wireframeToggleBtn" class="btn-panel btn-utility"><i class="fa-solid fa-border-all"></i> Wireframe</button>
+                    <button id="autoRotateToggleBtn" class="btn-panel btn-utility"><i class="fa-solid fa-rotate"></i> Spin Shape</button>
+                </div>
+
+                <div class="form-group" style="margin-top: 10px;">
+                    <label>X-Ray Opacity (Transparency)</label>
+                    <div class="slider-group">
+                        <input type="range" id="opacitySlider" min="0.1" max="1.0" step="0.05" value="1.0">
+                        <span id="opacityVal" style="font-size: 0.75rem; color: var(--accent-cyan);">100%</span>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Override Material Color</label>
+                    <input type="color" id="modelColorPicker" value="#3b4252">
+                </div>
+
+                <div class="button-group">
+                    <button id="resetMaterialBtn" class="btn-panel btn-utility" style="width: 100%;"><i class="fa-solid fa-arrow-rotate-left"></i> Reset Visuals</button>
+                </div>
             </div>
         </div>
     </div>
@@ -427,7 +471,12 @@
     </div>
 
    <script>
-    const ZABBIX_URL = "http://localhost:8080/zabbix/api_jsonrpc.php";
+    // DYNAMIC ZABBIX PORT & API ROUTER
+    const ZABBIX_PORT = "8080";
+    const ZABBIX_URL = window.location.port === ZABBIX_PORT 
+        ? "/zabbix/api_jsonrpc.php" 
+        : `http://${window.location.hostname}:${ZABBIX_PORT}/zabbix/api_jsonrpc.php`;
+
     const API_TOKEN = "66165b04010ffd26311c49c0c20a23f9ae9369879388cb8fb654fabab755ca34"; 
     const HOST_NAME = "Server Room"; 
 
@@ -791,6 +840,19 @@
         }
     });
 
+    // --- SIDEBAR DRAWER TOGGLE FUNCTION ---
+    function toggleSidebar() {
+        const sidebar = document.getElementById('sidebar');
+        sidebar.classList.toggle('collapsed');
+        
+        // Trigger resize so WebGL canvas updates aspect ratio smoothly
+        setTimeout(() => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }, 300);
+    }
+
     // 3D SENSOR CREATION & SURFACE ORIENTATION
     function create3DSensorNode(point, normal, sensorName, zabbixItemKey) {
         let sensorObject;
@@ -941,7 +1003,7 @@
     window.addEventListener('click', onPointerClick);
 
     function onPointerClick(event) {
-        if (event.target.closest('.panel-stack') || event.target.closest('.modal')) return;
+        if (event.target.closest('#sidebar') || event.target.closest('.modal')) return;
 
         mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
         mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
