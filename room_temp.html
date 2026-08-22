@@ -86,6 +86,7 @@
             font-weight: 600;
         }
         .stat-badge i { font-size: 1rem; color: var(--accent-cyan); }
+        #openInventoryBtn:hover { background: rgba(0, 242, 254, 0.15); border-color: var(--accent-cyan); }
         .pulse-dot {
             width: 8px;
             height: 8px;
@@ -353,6 +354,104 @@
         .hint.highlight { border-color: var(--accent-cyan); color: var(--accent-cyan); box-shadow: 0 0 15px rgba(0, 242, 254, 0.3); }
         .hint.delete-highlight { border-color: var(--accent-red); color: var(--accent-red); box-shadow: 0 0 15px rgba(255, 0, 85, 0.3); }
 
+        /* --- SENSOR INVENTORY DRAWER (LEFT SIDE) --- */
+        #inventoryPanel {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 360px;
+            height: 100vh;
+            background: var(--panel-bg);
+            backdrop-filter: blur(16px);
+            border-right: 1px solid var(--panel-border);
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 1000;
+            padding: 20px;
+            box-shadow: 5px 0 25px rgba(0, 0, 0, 0.5);
+            display: flex;
+            flex-direction: column;
+        }
+
+        #inventoryPanel.collapsed { transform: translateX(-100%); }
+
+        #inventoryToggle {
+            position: absolute;
+            right: -26px;
+            top: 40%;
+            transform: translateY(-50%);
+            width: 26px;
+            height: 120px;
+            background: rgba(0, 242, 254, 0.15);
+            border: 1px solid var(--accent-cyan);
+            border-left: none;
+            border-radius: 0 10px 10px 0;
+            cursor: pointer;
+            outline: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--accent-cyan);
+            font-size: 0.9rem;
+            box-shadow: 3px 0 12px rgba(0, 242, 254, 0.35);
+            transition: background 0.2s, width 0.2s, right 0.2s;
+            animation: inventoryTogglePulse 2.5s infinite;
+        }
+
+        #inventoryToggle:hover {
+            background: rgba(0, 242, 254, 0.3);
+            width: 30px;
+            right: -30px;
+            animation: none;
+        }
+
+        @keyframes inventoryTogglePulse {
+            0%, 100% { box-shadow: 3px 0 12px rgba(0, 242, 254, 0.35); }
+            50% { box-shadow: 3px 0 20px rgba(0, 242, 254, 0.7); }
+        }
+
+        .inventory-header {
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            padding-bottom: 10px;
+            margin-bottom: 10px;
+        }
+
+        .inventory-scroll { flex: 1; overflow-y: auto; }
+
+        .inv-table { width: 100%; border-collapse: collapse; font-size: 0.72rem; }
+        .inv-table th {
+            text-align: left;
+            padding: 6px 4px;
+            border-bottom: 1px solid var(--panel-border);
+            color: var(--text-muted);
+            position: sticky;
+            top: 0;
+            background: rgba(15, 17, 26, 0.95);
+        }
+        .inv-table td { padding: 6px 4px; border-bottom: 1px solid rgba(255, 255, 255, 0.05); color: var(--text-main); }
+        .inv-empty-row td { color: var(--text-muted); text-align: center; padding: 20px 4px; font-style: italic; }
+
+        .inv-status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 4px; }
+
+        .inv-del-btn {
+            background: rgba(255, 0, 85, 0.15);
+            color: var(--accent-red);
+            border: 1px solid rgba(255, 0, 85, 0.4);
+            border-radius: 6px;
+            padding: 2px 6px;
+            font-size: 0.65rem;
+            cursor: pointer;
+        }
+        .inv-del-btn:hover { background: rgba(255, 0, 85, 0.3); }
+
+        .csv-hint { font-size: 0.68rem; color: var(--text-muted); margin-bottom: 6px; line-height: 1.4; }
+        .csv-hint code { color: var(--accent-cyan); }
+
         @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.03); } 100% { transform: scale(1); } }
         @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
         @keyframes fadeIn { from { opacity: 0; transform: translate(-50%, -48%); } to { opacity: 1; transform: translate(-50%, -50%); } }
@@ -378,6 +477,9 @@
         <div class="system-stats">
             <div class="stat-badge"><div class="pulse-dot"></div> Zabbix API Connected</div>
             <div class="stat-badge"><i class="fa-solid fa-microchip"></i> Sensors: <span id="statSensorCount">0</span></div>
+            <div class="stat-badge" id="openInventoryBtn" onclick="toggleInventoryPanel()" style="cursor: pointer;">
+                <i class="fa-solid fa-list"></i> Sensor List
+            </div>
         </div>
     </header>
 
@@ -412,6 +514,19 @@
                     <button id="togglePlaceBtn" class="btn-panel btn-add"><i class="fa-solid fa-plus"></i> Add Sensor</button>
                     <button id="toggleDeleteBtn" class="btn-panel btn-delete"><i class="fa-solid fa-trash"></i> Delete</button>
                 </div>
+
+                <div class="form-group" style="margin-top: 14px;">
+                    <label>Import Sensors from CSV</label>
+                    <div class="csv-hint">
+                        Each line: <code>name,itemKey,x,y,z</code><br>
+                        Optional surface normal: <code>name,itemKey,x,y,z,nx,ny,nz</code><br>
+                        Example: <code>Rack Temp #2,room.temp2,1.2,0.45,-0.8</code>
+                    </div>
+                    <label for="csvSensorFileInput" class="file-upload-btn">
+                        <i class="fa-solid fa-file-csv"></i> Choose CSV File
+                    </label>
+                    <input type="file" id="csvSensorFileInput" accept=".csv,.txt" style="display: none;">
+                </div>
             </div>
 
             <!-- Panel 2: 3D Shape Visual Effects -->
@@ -440,6 +555,36 @@
                     <button id="resetMaterialBtn" class="btn-panel btn-utility" style="width: 100%;"><i class="fa-solid fa-arrow-rotate-left"></i> Reset Visuals</button>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- Sensor Inventory Drawer -->
+    <div id="inventoryPanel" class="collapsed">
+        <button id="inventoryToggle" title="Toggle Sensor Inventory" onclick="toggleInventoryPanel()">
+            <i class="fa-solid fa-chevron-right" id="inventoryToggleIcon"></i>
+        </button>
+
+        <div class="inventory-header">
+            <i class="fa-solid fa-list"></i> Sensor Inventory (<span id="statSensorCount2">0</span>)
+        </div>
+
+        <div class="inventory-scroll">
+            <table class="inv-table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Item Key</th>
+                        <th>X</th>
+                        <th>Y</th>
+                        <th>Z</th>
+                        <th>Status</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody id="inventoryTableBody">
+                    <tr class="inv-empty-row"><td colspan="7">No sensors placed yet</td></tr>
+                </tbody>
+            </table>
         </div>
     </div>
 
@@ -495,6 +640,7 @@
     let isPlacementMode = false;
     let isDeleteMode = false;
     let sensorToDelete = null;
+    let sensorUidCounter = 0;
 
     // SCENE SETUP
     const container = document.getElementById('canvas-container');
@@ -883,16 +1029,78 @@
             itemKey: zabbixItemKey, 
             isSensor: true,
             labelElement: labelEl,
-            currentStatus: 'DISCONNECTED'
+            currentStatus: 'DISCONNECTED',
+            uid: 'sensor_' + (sensorUidCounter++)
         };
         
         scene.add(sensorObject);
         clickableSensors.push(sensorObject);
         updateSensorCount();
+        updateInventoryTable();
 
         // Initial Telemetry Fetch
         fetchSensorData(sensorObject);
+
+        return sensorObject;
     }
+
+    // CSV SENSOR IMPORTER (3D World Coordinates)
+    // Expected columns: name,itemKey,x,y,z  (optional trailing nx,ny,nz for
+    // the surface normal / orientation; defaults to straight up).
+    async function importSensorsFromCSV3D(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const text = await file.text();
+        const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
+
+        let added = 0;
+        let skipped = 0;
+
+        for (let idx = 0; idx < lines.length; idx++) {
+            const line = lines[idx];
+
+            // Skip an optional header row.
+            if (idx === 0 && /^name\s*,\s*itemkey\s*,\s*x\s*,\s*y\s*,\s*z/i.test(line)) continue;
+
+            const parts = line.split(',').map(p => p.trim());
+            if (parts.length < 5) { skipped++; continue; }
+
+            const [name, itemKey, xStr, yStr, zStr, nxStr, nyStr, nzStr] = parts;
+            const x = parseFloat(xStr);
+            const y = parseFloat(yStr);
+            const z = parseFloat(zStr);
+
+            if (!name || !itemKey || isNaN(x) || isNaN(y) || isNaN(z)) {
+                skipped++;
+                continue;
+            }
+
+            let normal = new THREE.Vector3(0, 1, 0);
+            if (parts.length >= 8) {
+                const nx = parseFloat(nxStr);
+                const ny = parseFloat(nyStr);
+                const nz = parseFloat(nzStr);
+                if (!isNaN(nx) && !isNaN(ny) && !isNaN(nz) && (nx !== 0 || ny !== 0 || nz !== 0)) {
+                    normal = new THREE.Vector3(nx, ny, nz);
+                }
+            }
+
+            create3DSensorNode(new THREE.Vector3(x, y, z), normal, name, itemKey);
+            sensorCount++;
+            added++;
+        }
+
+        updateInventoryTable();
+
+        hintBox.innerHTML = `<i class="fa-solid fa-file-csv"></i> Imported ${added} sensor(s)${skipped > 0 ? `, skipped ${skipped} invalid line(s)` : ''}.`;
+        hintBox.className = 'hint highlight';
+        setTimeout(resetHint, 4000);
+
+        event.target.value = ''; // allow re-selecting the same file later
+    }
+
+    document.getElementById('csvSensorFileInput').addEventListener('change', importSensorsFromCSV3D);
 
     // DYNAMIC MATERIAL SENSOR COLORIZER
     function setSensorColor(sensorObject, colorHex, statusStyleClass) {
@@ -938,6 +1146,86 @@
 
     function updateSensorCount() {
         document.getElementById('statSensorCount').innerText = clickableSensors.length;
+        const el2 = document.getElementById('statSensorCount2');
+        if (el2) el2.innerText = clickableSensors.length;
+    }
+
+    function escapeHtml(str) {
+        const div = document.createElement('div');
+        div.innerText = String(str == null ? '' : str);
+        return div.innerHTML;
+    }
+
+    const STATUS_DOT_COLORS = {
+        normal: '#00f5a0',
+        warning: '#ffaa00',
+        alarm: '#ff0055',
+        disconnected: '#94a3b8',
+        selected: '#00f2fe',
+        DISCONNECTED: '#94a3b8'
+    };
+
+    const STATUS_LABELS = {
+        normal: 'Normal',
+        warning: 'Warning',
+        alarm: 'Alarm',
+        disconnected: 'Disconnected',
+        selected: 'Selected',
+        DISCONNECTED: 'Disconnected'
+    };
+
+    // SENSOR INVENTORY TABLE (bottom-left drawer): mirrors the live sensor
+    // list, including position, so it stays in sync with placements made
+    // manually, via CSV import, or removed via delete mode.
+    function updateInventoryTable() {
+        const tbody = document.getElementById('inventoryTableBody');
+        if (!tbody) return;
+
+        if (clickableSensors.length === 0) {
+            tbody.innerHTML = '<tr class="inv-empty-row"><td colspan="7">No sensors placed yet</td></tr>';
+            return;
+        }
+
+        const rows = clickableSensors.map(sensor => {
+            const status = sensor.userData.currentStatus || 'disconnected';
+            const dotColor = STATUS_DOT_COLORS[status] || STATUS_DOT_COLORS.disconnected;
+            const label = STATUS_LABELS[status] || 'Disconnected';
+            const uid = sensor.userData.uid;
+
+            return `<tr data-uid="${escapeHtml(uid)}">
+                <td>${escapeHtml(sensor.userData.name)}</td>
+                <td>${escapeHtml(sensor.userData.itemKey)}</td>
+                <td>${sensor.position.x.toFixed(2)}</td>
+                <td>${sensor.position.y.toFixed(2)}</td>
+                <td>${sensor.position.z.toFixed(2)}</td>
+                <td><span class="inv-status-dot" style="background:${dotColor}"></span>${label}</td>
+                <td><button class="inv-del-btn" data-uid="${escapeHtml(uid)}" title="Remove sensor">✕</button></td>
+            </tr>`;
+        });
+
+        tbody.innerHTML = rows.join('');
+    }
+
+    // Delegate delete-button clicks inside the inventory table to the
+    // existing delete-confirmation flow.
+    document.getElementById('inventoryTableBody').addEventListener('click', (event) => {
+        const btn = event.target.closest('.inv-del-btn');
+        if (!btn) return;
+        const uid = btn.getAttribute('data-uid');
+        const sensor = clickableSensors.find(s => s.userData.uid === uid);
+        if (sensor) promptDeleteSensor(sensor);
+    });
+
+    // --- INVENTORY DRAWER TOGGLE ---
+    function toggleInventoryPanel() {
+        const panel = document.getElementById('inventoryPanel');
+        panel.classList.toggle('collapsed');
+
+        const icon = document.getElementById('inventoryToggleIcon');
+        if (icon) {
+            icon.classList.toggle('fa-chevron-right', panel.classList.contains('collapsed'));
+            icon.classList.toggle('fa-chevron-left', !panel.classList.contains('collapsed'));
+        }
     }
 
     // CONTROLS & EVENT HANDLERS
@@ -1087,6 +1375,7 @@
             clickableSensors = clickableSensors.filter(sensor => sensor !== sensorToDelete);
             sensorToDelete = null;
             updateSensorCount();
+            updateInventoryTable();
         }
         closeConfirmModal();
         disableDeleteMode();
@@ -1169,6 +1458,7 @@
                     statusBadge.className = `status-badge ${badgeStyleClass}`;
                 }
 
+                updateInventoryTable();
             } else {
                 markSensorDisconnected(sensorObject);
             }
@@ -1194,6 +1484,8 @@
             statusBadge.innerText = "DISCONNECTED";
             statusBadge.className = "status-badge status-disconnected";
         }
+
+        updateInventoryTable();
     }
 
     // Global Background Telemetry Poller
