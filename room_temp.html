@@ -10,7 +10,1647 @@
     <style>
         :root {
             --bg-dark: #0f111a;
+            --panel-bg: rgba(22, 27, 38, 0.92);<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Digital Twin - Enhanced Telemetry & Visual Studio</title>
+    <!-- Font Awesome Icons & Google Font -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-dark: #0f111a;
             --panel-bg: rgba(22, 27, 38, 0.92);
+            --panel-border: rgba(98, 114, 164, 0.3);
+            --accent-cyan: #00f2fe;
+            --accent-purple: #7928ca;
+            --accent-green: #00f5a0;
+            --accent-yellow: #ffaa00;
+            --accent-red: #ff0055;
+            --accent-grey: #94a3b8;
+            --text-main: #f8f8f2;
+            --text-muted: #94a3b8;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            margin: 0;
+            overflow: hidden;
+        }
+
+        /* Top Navigation Header */
+        header {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            right: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 10;
+            pointer-events: none;
+        }
+
+        .brand-panel {
+            background: var(--panel-bg);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--panel-border);
+            padding: 12px 20px;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+            pointer-events: auto;
+        }
+
+        h1 { 
+            margin: 0; 
+            font-size: 1.25rem; 
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--accent-cyan), #4facfe);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        p { margin: 3px 0 0 0; font-size: 0.75rem; color: var(--text-muted); }
+
+        .system-stats {
+            display: flex;
+            gap: 15px;
+            pointer-events: auto;
+        }
+
+        .stat-badge {
+            background: var(--panel-bg);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--panel-border);
+            padding: 8px 16px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+        .stat-badge i { font-size: 1rem; color: var(--accent-cyan); }
+        #openInventoryBtn:hover { background: rgba(0, 242, 254, 0.15); border-color: var(--accent-cyan); }
+        .pulse-dot {
+            width: 8px;
+            height: 8px;
+            background-color: var(--accent-green);
+            border-radius: 50%;
+            box-shadow: 0 0 10px var(--accent-green);
+            animation: blink 1.5s infinite;
+        }
+
+        /* 3D Canvas Container */
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+            display: block;
+        }
+        
+        #canvas-container.placement-mode { cursor: crosshair !important; }
+        #canvas-container.delete-mode { cursor: pointer !important; }
+
+        /* --- COLLAPSIBLE SIDEBAR DRAWER PANEL --- */
+        #sidebar {
+            position: fixed;
+            top: 0;
+            right: 0;
+            width: 320px;
+            height: 100vh;
+            background: var(--panel-bg);
+            backdrop-filter: blur(16px);
+            border-left: 1px solid var(--panel-border);
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 1000;
+            padding: 20px;
+            box-shadow: -5px 0 25px rgba(0, 0, 0, 0.5);
+        }
+
+        /* Hidden State (Translates Drawer off-screen to the right) */
+        #sidebar.collapsed {
+            transform: translateX(100%);
+        }
+
+        /* Minimalist Rounded Tab Handle (Matching the Reference Image) */
+        #sidebarToggle {
+            position: absolute;
+            left: -18px;
+            top: 40%;
+            transform: translateY(-50%);
+            width: 18px;
+            height: 110px;
+            background: rgba(35, 43, 56, 0.85);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-right: none;
+            border-radius: 10px 0 0 10px;
+            cursor: pointer;
+            outline: none;
+            box-shadow: -3px 0 8px rgba(0, 0, 0, 0.4);
+            transition: background 0.2s, width 0.2s, left 0.2s;
+        }
+
+        #sidebarToggle:hover {
+            background: rgba(55, 68, 88, 0.95);
+            width: 22px;
+            left: -22px;
+        }
+
+        .panel-stack {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            height: 100%;
+            overflow-y: auto;
+            padding-right: 5px;
+        }
+
+        .control-panel {
+            background: rgba(15, 17, 26, 0.6);
+            padding: 16px;
+            border-radius: 12px;
+            border: 1px solid var(--panel-border);
+        }
+
+        .control-panel h3 { 
+            margin: 0 0 12px 0; 
+            font-size: 0.95rem; 
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            padding-bottom: 8px;
+        }
+
+        .form-group { margin-bottom: 10px; text-align: left; }
+        .form-group label { display: block; font-size: 0.72rem; color: var(--text-muted); margin-bottom: 4px; font-weight: 600; }
+        .form-group input[type="text"], .form-group input[type="color"] { 
+            width: 100%; 
+            padding: 8px 10px; 
+            background: rgba(15, 17, 26, 0.7); 
+            border: 1px solid var(--panel-border); 
+            color: var(--text-main); 
+            border-radius: 8px; 
+            box-sizing: border-box;
+            font-size: 0.82rem;
+            transition: all 0.3s ease;
+        }
+        .form-group input[type="color"] { height: 36px; cursor: pointer; padding: 2px; }
+
+        .slider-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .slider-group input[type="range"] {
+            flex: 1;
+            accent-color: var(--accent-cyan);
+            cursor: pointer;
+        }
+
+        /* File Upload Input styling */
+        .file-upload-btn {
+            width: 100%;
+            padding: 8px 12px;
+            background: rgba(0, 242, 254, 0.1);
+            border: 1px dashed var(--accent-cyan);
+            color: var(--accent-cyan);
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: all 0.2s ease;
+            box-sizing: border-box;
+        }
+        .file-upload-btn:hover { background: rgba(0, 242, 254, 0.2); }
+
+        .button-group { display: flex; gap: 8px; margin-top: 12px; }
+
+        .btn-panel {
+            flex: 1;
+            padding: 9px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.78rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            transition: all 0.2s ease;
+        }
+
+        .btn-add { background: linear-gradient(135deg, #00f2fe, #4facfe); color: #0f111a; }
+        .btn-add:hover { transform: translateY(-2px); box-shadow: 0 4px 15px rgba(0, 242, 254, 0.4); }
+        .btn-add.active { background: #ff0055; color: white; animation: pulse 1.5s infinite; }
+
+        .btn-delete { background: rgba(255, 0, 85, 0.15); color: #ff0055; border: 1px solid rgba(255, 0, 85, 0.4); }
+        .btn-delete:hover { background: rgba(255, 0, 85, 0.3); }
+        .btn-delete.active { background: #ffaa00; color: #0f111a; border-color: #ffaa00; animation: pulse 1.5s infinite; }
+
+        .btn-utility { background: rgba(255, 255, 255, 0.08); color: var(--text-main); border: 1px solid var(--panel-border); }
+        .btn-utility:hover { background: rgba(255, 255, 255, 0.18); }
+        .btn-utility.active { background: var(--accent-cyan); color: #0f111a; font-weight: 700; }
+
+        /* Dynamic Floating 3D Overlay Labels */
+        .sensor-label {
+            position: absolute;
+            background: rgba(15, 17, 26, 0.85);
+            border: 1px solid var(--accent-cyan);
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            color: var(--accent-cyan);
+            pointer-events: none;
+            transform: translate(-50%, -100%);
+            white-space: nowrap;
+            box-shadow: 0 0 10px rgba(0, 242, 254, 0.2);
+            transition: all 0.3s ease;
+        }
+
+        /* Color classes for overlay labels */
+        .sensor-label.normal { border-color: var(--accent-green); color: var(--accent-green); box-shadow: 0 0 10px rgba(0, 245, 160, 0.3); }
+        .sensor-label.warning { border-color: var(--accent-yellow); color: var(--accent-yellow); box-shadow: 0 0 10px rgba(255, 170, 0, 0.3); }
+        .sensor-label.alarm { border-color: var(--accent-red); color: var(--accent-red); box-shadow: 0 0 10px rgba(255, 0, 85, 0.4); }
+        .sensor-label.disconnected { border-color: var(--accent-grey); color: var(--accent-grey); box-shadow: none; }
+        .sensor-label.selected { border-color: var(--accent-cyan); color: var(--accent-cyan); box-shadow: 0 0 15px rgba(0, 242, 254, 0.5); }
+
+        /* Modal Panels */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: var(--panel-bg);
+            backdrop-filter: blur(20px);
+            padding: 25px;
+            border-radius: 16px;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8);
+            border: 1px solid var(--panel-border);
+            width: 320px;
+            text-align: center;
+            z-index: 2000;
+            animation: fadeIn 0.3s ease-out;
+        }
+
+        .modal h2 { margin-top: 0; color: var(--accent-cyan); font-size: 1.2rem; font-weight: 700; }
+        .temp-display { 
+            font-size: 3.5rem; 
+            font-weight: 700; 
+            margin: 15px 0; 
+            color: var(--accent-green); 
+            text-shadow: 0 0 20px rgba(0, 245, 160, 0.3); 
+            transition: color 0.3s ease;
+        }
+        
+        .status-badge { 
+            padding: 6px 14px; 
+            border-radius: 20px; 
+            font-weight: 700; 
+            font-size: 0.75rem; 
+            letter-spacing: 0.5px;
+            display: inline-block;
+            transition: all 0.3s ease;
+        }
+        
+        /* Dynamic Modal Status Theme Styles */
+        .status-ok { background: rgba(0, 245, 160, 0.15); color: var(--accent-green); border: 1px solid var(--accent-green); }
+        .status-warning { background: rgba(255, 170, 0, 0.15); color: var(--accent-yellow); border: 1px solid var(--accent-yellow); }
+        .status-alarm { background: rgba(255, 0, 85, 0.15); color: var(--accent-red); border: 1px solid var(--accent-red); animation: pulse 1s infinite; }
+        .status-disconnected { background: rgba(148, 163, 184, 0.15); color: var(--accent-grey); border: 1px solid var(--accent-grey); }
+        
+        .modal-buttons { display: flex; gap: 10px; margin-top: 25px; }
+        .modal-btn { 
+            flex: 1; padding: 10px; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 0.85rem; transition: all 0.2s; 
+        }
+        .close-btn { background: rgba(148, 163, 184, 0.2); color: var(--text-main); }
+        .close-btn:hover { background: rgba(148, 163, 184, 0.4); }
+        .confirm-btn { background: var(--accent-red); color: white; }
+        .confirm-btn:hover { background: #d00045; }
+
+        /* Instruction Hint Bar */
+        .hint {
+            position: absolute;
+            bottom: 25px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--panel-bg);
+            backdrop-filter: blur(12px);
+            padding: 10px 20px;
+            border-radius: 30px;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            pointer-events: none;
+            border: 1px solid var(--panel-border);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: all 0.3s ease;
+            z-index: 10;
+        }
+        .hint.highlight { border-color: var(--accent-cyan); color: var(--accent-cyan); box-shadow: 0 0 15px rgba(0, 242, 254, 0.3); }
+        .hint.delete-highlight { border-color: var(--accent-red); color: var(--accent-red); box-shadow: 0 0 15px rgba(255, 0, 85, 0.3); }
+
+        /* --- SENSOR INVENTORY DRAWER (LEFT SIDE) --- */
+        #inventoryPanel {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 360px;
+            height: 100vh;
+            background: var(--panel-bg);
+            backdrop-filter: blur(16px);
+            border-right: 1px solid var(--panel-border);
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 1000;
+            padding: 20px;
+            box-shadow: 5px 0 25px rgba(0, 0, 0, 0.5);
+            display: flex;
+            flex-direction: column;
+        }
+
+        #inventoryPanel.collapsed { transform: translateX(-100%); }
+
+        #inventoryToggle {
+            position: absolute;
+            right: -26px;
+            top: 40%;
+            transform: translateY(-50%);
+            width: 26px;
+            height: 120px;
+            background: rgba(0, 242, 254, 0.15);
+            border: 1px solid var(--accent-cyan);
+            border-left: none;
+            border-radius: 0 10px 10px 0;
+            cursor: pointer;
+            outline: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--accent-cyan);
+            font-size: 0.9rem;
+            box-shadow: 3px 0 12px rgba(0, 242, 254, 0.35);
+            transition: background 0.2s, width 0.2s, right 0.2s;
+            animation: inventoryTogglePulse 2.5s infinite;
+        }
+
+        #inventoryToggle:hover {
+            background: rgba(0, 242, 254, 0.3);
+            width: 30px;
+            right: -30px;
+            animation: none;
+        }
+
+        @keyframes inventoryTogglePulse {
+            0%, 100% { box-shadow: 3px 0 12px rgba(0, 242, 254, 0.35); }
+            50% { box-shadow: 3px 0 20px rgba(0, 242, 254, 0.7); }
+        }
+
+        .inventory-header {
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            padding-bottom: 10px;
+            margin-bottom: 10px;
+        }
+
+        .inventory-scroll { flex: 1; overflow-y: auto; }
+
+        .inv-table { width: 100%; border-collapse: collapse; font-size: 0.72rem; }
+        .inv-table th {
+            text-align: left;
+            padding: 6px 4px;
+            border-bottom: 1px solid var(--panel-border);
+            color: var(--text-muted);
+            position: sticky;
+            top: 0;
+            background: rgba(15, 17, 26, 0.95);
+        }
+        .inv-table td { padding: 6px 4px; border-bottom: 1px solid rgba(255, 255, 255, 0.05); color: var(--text-main); }
+        .inv-empty-row td { color: var(--text-muted); text-align: center; padding: 20px 4px; font-style: italic; }
+
+        .inv-status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 4px; }
+
+        .inv-del-btn {
+            background: rgba(255, 0, 85, 0.15);
+            color: var(--accent-red);
+            border: 1px solid rgba(255, 0, 85, 0.4);
+            border-radius: 6px;
+            padding: 2px 6px;
+            font-size: 0.65rem;
+            cursor: pointer;
+        }
+        .inv-del-btn:hover { background: rgba(255, 0, 85, 0.3); }
+
+        .csv-hint { font-size: 0.68rem; color: var(--text-muted); margin-bottom: 6px; line-height: 1.4; }
+        .csv-hint code { color: var(--accent-cyan); }
+
+        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.03); } 100% { transform: scale(1); } }
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+        @keyframes fadeIn { from { opacity: 0; transform: translate(-50%, -48%); } to { opacity: 1; transform: translate(-50%, -50%); } }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+
+    <!-- Three.js Engine & Loaders (GLTF + STL + STEP WASM Loaders) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/STLLoader.js"></script>
+
+    <!-- OpenCASCADE WebAssembly CAD Parser for Native .STEP / .STP Support -->
+    <script src="https://cdn.jsdelivr.net/npm/occt-import-js@0.0.12/dist/occt-import-js.js"></script>
+</head>
+<body>
+
+    <header>
+        <div class="brand-panel">
+            <h1><i class="fa-solid fa-cube"></i> DIGITAL TWIN STUDIO</h1>
+            <p>glTF & 3D CAD Telemetry Monitoring</p>
+        </div>
+
+        <div class="system-stats">
+            <div class="stat-badge"><div class="pulse-dot"></div> Zabbix API Connected</div>
+            <div class="stat-badge"><i class="fa-solid fa-microchip"></i> Sensors: <span id="statSensorCount">0</span></div>
+            <div class="stat-badge" id="openInventoryBtn" onclick="toggleInventoryPanel()" style="cursor: pointer;">
+                <i class="fa-solid fa-list"></i> Sensor List
+            </div>
+        </div>
+    </header>
+
+    <!-- Collapsible Sidebar Drawer -->
+    <div id="sidebar" class="sidebar collapsed">
+        <!-- Minimalist Tab Handle -->
+        <button id="sidebarToggle" onclick="toggleSidebar()" title="Toggle Control Menu"></button>
+
+        <div class="panel-stack">
+            <!-- Panel 1: Model & Sensor Setup -->
+            <div class="control-panel">
+                <h3><i class="fa-solid fa-layer-group"></i> Model & Sensors</h3>
+
+                <div class="form-group">
+                    <label>Load 3D Model (.GLB / .GLTF / .STEP)</label>
+                    <label for="modelFileInput" class="file-upload-btn">
+                        <i class="fa-solid fa-file-import"></i> Upload 3D Shape
+                    </label>
+                    <input type="file" id="modelFileInput" accept=".glb,.gltf,.stl,.step,.stp" style="display: none;">
+                </div>
+
+                <div class="form-group">
+                    <label for="sensorTitle">Sensor Display Name</label>
+                    <input type="text" id="sensorTitle" value="Server Rack Sensor #1">
+                </div>
+                <div class="form-group">
+                    <label for="itemKey">Zabbix Item Key</label>
+                    <input type="text" id="itemKey" value="room.temp">
+                </div>
+                
+                <div class="button-group">
+                    <button id="togglePlaceBtn" class="btn-panel btn-add"><i class="fa-solid fa-plus"></i> Add Sensor</button>
+                    <button id="toggleDeleteBtn" class="btn-panel btn-delete"><i class="fa-solid fa-trash"></i> Delete</button>
+                </div>
+
+                <div class="form-group" style="margin-top: 14px;">
+                    <label>Import Sensors from CSV</label>
+                    <div class="csv-hint">
+                        Each line: <code>name,itemKey,x,y,z</code><br>
+                        Optional surface normal: <code>name,itemKey,x,y,z,nx,ny,nz</code><br>
+                        Example: <code>Rack Temp #2,room.temp2,1.2,0.45,-0.8</code>
+                    </div>
+                    <label for="csvSensorFileInput" class="file-upload-btn">
+                        <i class="fa-solid fa-file-csv"></i> Choose CSV File
+                    </label>
+                    <input type="file" id="csvSensorFileInput" accept=".csv,.txt" style="display: none;">
+                </div>
+            </div>
+
+            <!-- Panel 2: 3D Shape Visual Effects -->
+            <div class="control-panel">
+                <h3><i class="fa-solid fa-wand-magic-sparkles"></i> 3D Shape Manipulator</h3>
+
+                <div class="button-group">
+                    <button id="wireframeToggleBtn" class="btn-panel btn-utility"><i class="fa-solid fa-border-all"></i> Wireframe</button>
+                    <button id="autoRotateToggleBtn" class="btn-panel btn-utility active"><i class="fa-solid fa-rotate"></i> Spin Shape</button>
+                </div>
+
+                <div class="form-group" style="margin-top: 10px;">
+                    <label>X-Ray Opacity (Transparency)</label>
+                    <div class="slider-group">
+                        <input type="range" id="opacitySlider" min="0.1" max="1.0" step="0.05" value="1.0">
+                        <span id="opacityVal" style="font-size: 0.75rem; color: var(--accent-cyan);">100%</span>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Override Material Color</label>
+                    <input type="color" id="modelColorPicker" value="#3b4252">
+                </div>
+
+                <div class="button-group">
+                    <button id="resetMaterialBtn" class="btn-panel btn-utility" style="width: 100%;"><i class="fa-solid fa-arrow-rotate-left"></i> Reset Visuals</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sensor Inventory Drawer -->
+    <div id="inventoryPanel" class="collapsed">
+        <button id="inventoryToggle" title="Toggle Sensor Inventory" onclick="toggleInventoryPanel()">
+            <i class="fa-solid fa-chevron-right" id="inventoryToggleIcon"></i>
+        </button>
+
+        <div class="inventory-header">
+            <i class="fa-solid fa-list"></i> Sensor Inventory (<span id="statSensorCount2">0</span>)
+        </div>
+
+        <div class="inventory-scroll">
+            <table class="inv-table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Item Key</th>
+                        <th>X</th>
+                        <th>Y</th>
+                        <th>Z</th>
+                        <th>Status</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody id="inventoryTableBody">
+                    <tr class="inv-empty-row"><td colspan="7">No sensors placed yet</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div id="hintBox" class="hint"><i class="fa-solid fa-rotate"></i> Auto-rotating | Drag left/right to spin | Click sensor to inspect</div>
+
+    <!-- Model Loading Overlay -->
+    <div id="loadingOverlay" style="display:none; position:fixed; inset:0; background:rgba(15,17,26,0.82); z-index:3000; display:none; flex-direction:column; align-items:center; justify-content:center; gap:16px; backdrop-filter:blur(6px);">
+        <div style="width:48px;height:48px;border:3px solid rgba(0,242,254,0.2);border-top-color:var(--accent-cyan);border-radius:50%;animation:spin 0.8s linear infinite;"></div>
+        <div id="loadingOverlayText" style="color:var(--accent-cyan);font-size:0.9rem;font-weight:600;letter-spacing:1px;">PARSING MODEL…</div>
+        <div style="color:var(--text-muted);font-size:0.75rem;">Large files may take a few seconds</div>
+    </div>
+
+    <!-- HTML Overlay Container for 3D Labels -->
+    <div id="labels-container" style="position: absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index: 5;"></div>
+
+    <div id="canvas-container"></div>
+
+    <!-- Sensor Details Modal -->
+    <div class="modal" id="sensorModal">
+        <h2 id="sensorName">Server Room Temp Sensor</h2>
+        <div class="temp-display" id="tempValue">-- °C</div>
+        <div>Status: <span id="statusBadge" class="status-badge status-ok">NORMAL</span></div>
+        <div class="modal-buttons">
+            <button class="modal-btn close-btn" onclick="closeModal()">Close Panel</button>
+        </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div class="modal" id="confirmDeleteModal">
+        <h2 style="color: var(--accent-red);"><i class="fa-solid fa-triangle-exclamation"></i> Confirm Delete</h2>
+        <p id="confirmDeleteText" style="color: var(--text-muted); font-size: 0.9rem; margin: 15px 0;">Are you sure you want to remove this sensor?</p>
+        <div class="modal-buttons">
+            <button class="modal-btn confirm-btn" onclick="confirmDeleteSensor()">Remove</button>
+            <button class="modal-btn close-btn" onclick="closeConfirmModal()">Cancel</button>
+        </div>
+    </div>
+
+   <script>
+    // DYNAMIC ZABBIX PORT & API ROUTER
+    const ZABBIX_PORT = "8080";
+    const ZABBIX_URL = window.location.port === ZABBIX_PORT 
+        ? "/zabbix/api_jsonrpc.php" 
+        : `http://${window.location.hostname}:${ZABBIX_PORT}/zabbix/api_jsonrpc.php`;
+
+    const API_TOKEN = "66165b04010ffd26311c49c0c20a23f9ae9369879388cb8fb654fabab755ca34"; 
+    const HOST_NAME = "Server Room"; 
+
+    // COLOR THEME MAP
+    const SENSOR_COLORS = {
+        NORMAL: 0x00f5a0,       // Green
+        WARNING: 0xffaa00,      // Yellow (almost high)
+        HIGH_ALARM: 0xff0055,   // Red (high / error)
+        DISCONNECTED: 0x94a3b8, // Slate Grey
+        SELECTED: 0x00f2fe      // Blue (clicked / active)
+    };
+
+    let globalPollingTimer = null;
+    let activeModalSensor = null;
+    let sensorCount = 1;
+    let isPlacementMode = false;
+    let isDeleteMode = false;
+    let sensorToDelete = null;
+    let sensorUidCounter = 0;
+
+    // SCENE SETUP
+    const container = document.getElementById('canvas-container');
+    const labelsContainer = document.getElementById('labels-container');
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0f111a);
+
+    const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.set(0, 0, 9);  // Y=0 keeps the camera exactly at equator height
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = true;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.2;
+    container.appendChild(renderer.domElement);
+
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+    controls.target.set(0, 0, 0);
+
+    // === LOCKED HORIZONTAL-SPIN-ONLY MODE ===
+    // Polar angle fixed at 90° = equator — user can never tilt up/down
+    controls.minPolarAngle = Math.PI / 2;
+    controls.maxPolarAngle = Math.PI / 2;
+    // No panning (no moving the scene)
+    controls.enablePan = false;
+    // No zooming
+    controls.enableZoom = false;
+    // Permanent auto-spin
+    controls.autoRotate = true;
+    controls.autoRotateSpeed = 1.5;
+
+    // STUDIO LIGHTING
+    const ambientLight = new THREE.AmbientLight(0xffffff, 1.2); 
+    scene.add(ambientLight);
+
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x333344, 1.0);
+    hemiLight.position.set(0, 20, 0);
+    scene.add(hemiLight);
+
+    const mainDirLight = new THREE.DirectionalLight(0xffffff, 1.5);
+    mainDirLight.position.set(10, 20, 10);
+    mainDirLight.castShadow = true;
+    scene.add(mainDirLight);
+
+    const fillLight = new THREE.DirectionalLight(0x00f2fe, 0.8);
+    fillLight.position.set(-10, 10, -10);
+    scene.add(fillLight);
+
+    let clickableSensors = [];
+    let roomSurfaces = [];
+    let currentLoadedModel = null;
+    let originalMaterials = new Map();
+
+    // SENSOR GLB MODEL TEMPLATE VARIABLE
+    let loadedSensorTemplate = null;
+
+    // LOAD LOADERS
+    // STLLoader is intentionally NOT instantiated here — it is created lazily
+    // inside the file-change handler after the CDN script is guaranteed loaded.
+    const gltfLoader = new THREE.GLTFLoader();
+
+    // Preload sensor.glb template
+    gltfLoader.load('sensor.glb', function (gltf) {
+        loadedSensorTemplate = gltf.scene;
+        
+        const box = new THREE.Box3().setFromObject(loadedSensorTemplate);
+        const size = box.getSize(new THREE.Vector3());
+        const maxDim = Math.max(size.x, size.y, size.z);
+        
+        if (maxDim > 0) {
+            const targetScale = 0.3 / maxDim;
+            loadedSensorTemplate.scale.set(targetScale, targetScale, targetScale);
+        }
+        
+        loadedSensorTemplate.traverse((child) => {
+            if (child.isMesh) {
+                child.castShadow = true;
+                child.receiveShadow = true;
+            }
+        });
+    }, undefined, function (error) {
+        console.warn("sensor.glb file not found. Defaulting to fallback 3D node shapes.");
+    });
+
+    // Initialize OpenCASCADE for STEP files
+    let occtEngine = null;
+    async function getCADEngine() {
+        if (!occtEngine) {
+            occtEngine = await occtimportjs();
+        }
+        return occtEngine;
+    }
+
+    // Load default scene
+    gltfLoader.load('room.glb', function (gltf) {
+        setupLoadedModel(gltf.scene);
+        create3DSensorNode(new THREE.Vector3(0, 0.45, 1.25), new THREE.Vector3(0, 1, 0), "Server Rack Temp #1", "room.temp");
+    }, undefined, function () {
+        createMock3DRoom();
+    });
+
+    function createMock3DRoom() {
+        const roomGroup = new THREE.Group();
+        const floorGeo = new THREE.PlaneGeometry(12, 12);
+        const floorMat = new THREE.MeshStandardMaterial({ color: 0x1a1d2e, roughness: 0.4 });
+        const floor = new THREE.Mesh(floorGeo, floorMat);
+        floor.rotation.x = -Math.PI / 2;
+        roomGroup.add(floor);
+
+        const grid = new THREE.GridHelper(12, 20, 0x00f2fe, 0x2e354f);
+        grid.position.y = 0.01;
+        roomGroup.add(grid);
+
+        const boxGeo = new THREE.BoxGeometry(2.5, 3.5, 2.5);
+        const boxMat = new THREE.MeshStandardMaterial({ color: 0x252a3e, metalness: 0.3, roughness: 0.4 });
+        const rack = new THREE.Mesh(boxGeo, boxMat);
+        rack.position.set(0, 1.75, 0);
+        roomGroup.add(rack);
+
+        setupLoadedModel(roomGroup);
+        create3DSensorNode(new THREE.Vector3(0, 0.45, 1.25), new THREE.Vector3(0, 0, 1), "Server Rack Temp #1", "room.temp");
+    }
+
+    // AUTOMATIC MODEL RE-CENTERING SYSTEM
+    function setupLoadedModel(modelObject) {
+        if (currentLoadedModel) {
+            scene.remove(currentLoadedModel);
+        }
+
+        const centeredGroup = new THREE.Group();
+
+        // Compute exact bounding box to find the true geometric centre on ALL axes
+        const box = new THREE.Box3().setFromObject(modelObject);
+        const center = box.getCenter(new THREE.Vector3());
+
+        // Shift the inner model so its geometric midpoint sits exactly at (0,0,0).
+        // This means the camera (also at Y=0) sees equal distance to the top and
+        // bottom of the shape — perfectly vertically centred.
+        modelObject.position.sub(center);
+        centeredGroup.add(modelObject);
+
+        // Fit the camera distance so the whole model fills the view comfortably
+        const size = box.getSize(new THREE.Vector3());
+        const maxDim = Math.max(size.x, size.y, size.z);
+        const fovRad = (camera.fov * Math.PI) / 180;
+        // Distance needed so the model's tallest dimension fills ~80% of the viewport
+        const fitDistance = (maxDim / 2) / Math.tan(fovRad / 2) * 1.35;
+        camera.position.set(0, 0, fitDistance);
+
+        // Lock target back to origin after every model load
+        controls.target.set(0, 0, 0);
+        controls.update();
+
+        currentLoadedModel = centeredGroup;
+        roomSurfaces = [];
+        originalMaterials.clear();
+
+        modelObject.traverse((child) => {
+            if (child.isMesh) {
+                child.castShadow = true;
+                child.receiveShadow = true;
+
+                if (child.material) {
+                    originalMaterials.set(child, child.material.clone());
+                    child.material.side = THREE.DoubleSide;
+                    if (child.material.metalness !== undefined && child.material.metalness > 0.8) {
+                        child.material.metalness = 0.3;
+                    }
+                    if (child.material.roughness !== undefined && child.material.roughness < 0.1) {
+                        child.material.roughness = 0.4;
+                    }
+                    child.material.needsUpdate = true;
+                }
+
+                roomSurfaces.push(child);
+            }
+        });
+
+        scene.add(currentLoadedModel);
+    }
+
+    // LOADING OVERLAY HELPERS
+    function showLoader(msg) {
+        const ov = document.getElementById('loadingOverlay');
+        document.getElementById('loadingOverlayText').innerText = msg || 'PARSING MODEL…';
+        ov.style.display = 'flex';
+    }
+    function hideLoader() {
+        document.getElementById('loadingOverlay').style.display = 'none';
+    }
+
+    // FILE IMPORTER (GLTF / CAD / STEP / STL)
+    document.getElementById('modelFileInput').addEventListener('change', function (event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const filename = file.name.toLowerCase();
+        const reader = new FileReader();
+
+        if (filename.endsWith('.glb')) {
+            // GLB = binary container: parse directly from ArrayBuffer
+            showLoader('LOADING GLB…');
+            reader.readAsArrayBuffer(file);
+            reader.onload = function (e) {
+                gltfLoader.parse(e.target.result, '', function (gltf) {
+                    const loadedScene = gltf.scene;
+                    const boundingBox = new THREE.Box3().setFromObject(loadedScene);
+                    const size = boundingBox.getSize(new THREE.Vector3());
+                    const maxDim = Math.max(size.x, size.y, size.z);
+                    if (maxDim > 30) {
+                        const scaleFactor = 10 / maxDim;
+                        loadedScene.scale.set(scaleFactor, scaleFactor, scaleFactor);
+                    }
+                    hideLoader();
+                    setupLoadedModel(loadedScene);
+                }, function (err) {
+                    hideLoader();
+                    console.error('GLB parse error:', err);
+                    alert('Failed to load GLB file. Check the browser console for details.');
+                });
+            };
+        }
+        else if (filename.endsWith('.gltf')) {
+            // GLTF = plain JSON text file: must be loaded via URL, not ArrayBuffer
+            showLoader('LOADING GLTF…');
+            const objectURL = URL.createObjectURL(file);
+            gltfLoader.load(objectURL, function (gltf) {
+                URL.revokeObjectURL(objectURL);
+                const loadedScene = gltf.scene;
+                const boundingBox = new THREE.Box3().setFromObject(loadedScene);
+                const size = boundingBox.getSize(new THREE.Vector3());
+                const maxDim = Math.max(size.x, size.y, size.z);
+                if (maxDim > 30) {
+                    const scaleFactor = 10 / maxDim;
+                    loadedScene.scale.set(scaleFactor, scaleFactor, scaleFactor);
+                }
+                hideLoader();
+                setupLoadedModel(loadedScene);
+            }, undefined, function (err) {
+                URL.revokeObjectURL(objectURL);
+                hideLoader();
+                console.error('GLTF load error:', err);
+                alert('Failed to load GLTF file. Note: external textures referenced by the .gltf may not load from a local file picker.');
+            });
+        }
+        else if (filename.endsWith('.step') || filename.endsWith('.stp')) {
+            showLoader('PARSING STEP/STP — this may take a moment…');
+            reader.readAsArrayBuffer(file);
+            reader.onload = async function (e) {
+                const fileContent = new Uint8Array(e.target.result);
+
+                try {
+                    const occt = await getCADEngine();
+
+                    // occt-import-js@0.0.12 correct API: takes {fileName, fileContent}
+                    const result = occt.ReadStepFile({
+                        fileName: file.name,
+                        fileContent: fileContent
+                    });
+
+                    if (!result || !result.success) {
+                        hideLoader();
+                        alert('Failed to parse STEP/STP CAD file. Ensure it is a valid ISO 10303 STEP file.');
+                        return;
+                    }
+
+                    const cadGroup = new THREE.Group();
+
+                    for (const meshData of result.meshes) {
+                        const geometry = new THREE.BufferGeometry();
+
+                        // occt-import-js@0.0.12 exposes flat typed arrays directly on attributes
+                        const positions = meshData.attributes.position.array;
+                        geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+
+                        if (meshData.attributes.normal && meshData.attributes.normal.array) {
+                            geometry.setAttribute('normal', new THREE.Float32BufferAttribute(meshData.attributes.normal.array, 3));
+                        } else {
+                            geometry.computeVertexNormals();
+                        }
+
+                        // Index buffer — stored as flat array in occt-import-js@0.0.12
+                        if (meshData.index && meshData.index.array) {
+                            geometry.setIndex(new THREE.BufferAttribute(new Uint32Array(meshData.index.array), 1));
+                        }
+
+                        // Use face colour from STEP metadata when available, else default slate
+                        let faceColor = 0x505a6e;
+                        if (meshData.color) {
+                            faceColor = new THREE.Color(
+                                meshData.color[0],
+                                meshData.color[1],
+                                meshData.color[2]
+                            ).getHex();
+                        }
+
+                        const material = new THREE.MeshStandardMaterial({
+                            color: faceColor,
+                            metalness: 0.3,
+                            roughness: 0.4,
+                            side: THREE.DoubleSide
+                        });
+
+                        const mesh = new THREE.Mesh(geometry, material);
+                        mesh.castShadow = true;
+                        mesh.receiveShadow = true;
+                        cadGroup.add(mesh);
+                    }
+
+                    if (cadGroup.children.length === 0) {
+                        hideLoader();
+                        alert('STEP file parsed but contained no renderable geometry.');
+                        return;
+                    }
+
+                    const boundingBox = new THREE.Box3().setFromObject(cadGroup);
+                    const size = boundingBox.getSize(new THREE.Vector3());
+                    const maxDim = Math.max(size.x, size.y, size.z);
+                    if (maxDim > 20) {
+                        const scaleFactor = 8 / maxDim;
+                        cadGroup.scale.set(scaleFactor, scaleFactor, scaleFactor);
+                    }
+
+                    hideLoader();
+                    setupLoadedModel(cadGroup);
+                } catch (err) {
+                    hideLoader();
+                    console.error('STEP CAD Engine Error:', err);
+                    alert('STEP/STP engine error: ' + (err.message || err));
+                }
+            };
+        }
+        else if (filename.endsWith('.stl')) {
+            if (typeof THREE.STLLoader !== 'function') {
+                alert('STL loader failed to initialise. Check your internet connection and reload the page.');
+                return;
+            }
+            // Lazy instantiation — safe because the CDN script is already executed by now
+            const stlLoader = new THREE.STLLoader();
+            showLoader('LOADING STL…');
+            reader.readAsArrayBuffer(file);
+            reader.onload = function (e) {
+                try {
+                    const geometry = stlLoader.parse(e.target.result);
+                    geometry.center();
+                    geometry.computeVertexNormals();
+
+                    const material = new THREE.MeshStandardMaterial({ 
+                        color: 0x505a6e, 
+                        metalness: 0.4, 
+                        roughness: 0.3,
+                        side: THREE.DoubleSide
+                    });
+                    
+                    const cadMesh = new THREE.Mesh(geometry, material);
+                    const boundingBox = new THREE.Box3().setFromObject(cadMesh);
+                    const size = boundingBox.getSize(new THREE.Vector3());
+                    const maxDim = Math.max(size.x, size.y, size.z);
+                    if (maxDim > 20) {
+                        const scaleFactor = 8 / maxDim;
+                        cadMesh.scale.set(scaleFactor, scaleFactor, scaleFactor);
+                    }
+
+                    const cadGroup = new THREE.Group();
+                    cadGroup.add(cadMesh);
+                    hideLoader();
+                    setupLoadedModel(cadGroup);
+                } catch (err) {
+                    hideLoader();
+                    console.error('STL parse error:', err);
+                    alert('Failed to parse STL file. The file may be corrupt or use an unsupported variant.');
+                }
+            };
+        }
+    });
+
+    // 3D VISUAL CONTROLS
+    let isWireframe = false;
+    let isAutoRotating = true; // starts on by default
+
+    document.getElementById('wireframeToggleBtn').addEventListener('click', function () {
+        isWireframe = !isWireframe;
+        this.classList.toggle('active', isWireframe);
+
+        if (currentLoadedModel) {
+            currentLoadedModel.traverse((child) => {
+                if (child.isMesh && child.material) {
+                    child.material.wireframe = isWireframe;
+                }
+            });
+        }
+    });
+
+    document.getElementById('autoRotateToggleBtn').addEventListener('click', function () {
+        isAutoRotating = !isAutoRotating;
+        this.classList.toggle('active', isAutoRotating);
+        controls.autoRotate = isAutoRotating;
+    });
+
+    document.getElementById('opacitySlider').addEventListener('input', function (e) {
+        const opacityVal = parseFloat(e.target.value);
+        document.getElementById('opacityVal').innerText = `${Math.round(opacityVal * 100)}%`;
+
+        if (currentLoadedModel) {
+            currentLoadedModel.traverse((child) => {
+                if (child.isMesh && child.material) {
+                    child.material.transparent = opacityVal < 1.0;
+                    child.material.opacity = opacityVal;
+                }
+            });
+        }
+    });
+
+    document.getElementById('modelColorPicker').addEventListener('input', function (e) {
+        const hexColor = e.target.value;
+        if (currentLoadedModel) {
+            currentLoadedModel.traverse((child) => {
+                if (child.isMesh && child.material) {
+                    child.material.color.set(hexColor);
+                }
+            });
+        }
+    });
+
+    document.getElementById('resetMaterialBtn').addEventListener('click', function () {
+        isWireframe = false;
+        isAutoRotating = true;
+        controls.autoRotate = true;
+        controls.target.set(0, 0, 0);
+
+        document.getElementById('wireframeToggleBtn').classList.remove('active');
+        document.getElementById('autoRotateToggleBtn').classList.add('active');
+        document.getElementById('opacitySlider').value = 1.0;
+        document.getElementById('opacityVal').innerText = "100%";
+
+        if (currentLoadedModel && originalMaterials.size > 0) {
+            currentLoadedModel.traverse((child) => {
+                if (child.isMesh && originalMaterials.has(child)) {
+                    child.material = originalMaterials.get(child).clone();
+                    child.material.side = THREE.DoubleSide;
+                }
+            });
+        }
+    });
+
+    // --- SIDEBAR DRAWER TOGGLE FUNCTION ---
+    function toggleSidebar() {
+        const sidebar = document.getElementById('sidebar');
+        sidebar.classList.toggle('collapsed');
+        
+        // Trigger resize so WebGL canvas updates aspect ratio smoothly
+        setTimeout(() => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }, 300);
+    }
+
+    // 3D SENSOR CREATION & SURFACE ORIENTATION
+    function create3DSensorNode(point, normal, sensorName, zabbixItemKey) {
+        let sensorObject;
+
+        if (loadedSensorTemplate) {
+            sensorObject = loadedSensorTemplate.clone(true);
+        } else {
+            const geo = new THREE.CylinderGeometry(0.12, 0.12, 0.08, 16);
+            const mat = new THREE.MeshStandardMaterial({ color: SENSOR_COLORS.DISCONNECTED });
+            sensorObject = new THREE.Mesh(geo, mat);
+        }
+
+        // Align position and orientation along surface normal
+        sensorObject.position.copy(point);
+        const upVector = new THREE.Vector3(0, 1, 0);
+        const quaternion = new THREE.Quaternion();
+        quaternion.setFromUnitVectors(upVector, normal.clone().normalize());
+        sensorObject.quaternion.copy(quaternion);
+
+        // Attach UI label
+        const labelEl = document.createElement('div');
+        labelEl.className = 'sensor-label disconnected';
+        labelEl.innerText = sensorName;
+        labelsContainer.appendChild(labelEl);
+        
+        sensorObject.userData = { 
+            name: sensorName, 
+            itemKey: zabbixItemKey, 
+            isSensor: true,
+            labelElement: labelEl,
+            currentStatus: 'DISCONNECTED',
+            uid: 'sensor_' + (sensorUidCounter++)
+        };
+        
+        scene.add(sensorObject);
+        clickableSensors.push(sensorObject);
+        updateSensorCount();
+        updateInventoryTable();
+
+        // Initial Telemetry Fetch
+        fetchSensorData(sensorObject);
+
+        return sensorObject;
+    }
+
+    // CSV SENSOR IMPORTER (3D World Coordinates)
+    // Expected columns: name,itemKey,x,y,z  (optional trailing nx,ny,nz for
+    // the surface normal / orientation; defaults to straight up).
+    async function importSensorsFromCSV3D(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const text = await file.text();
+        const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
+
+        let added = 0;
+        let skipped = 0;
+
+        for (let idx = 0; idx < lines.length; idx++) {
+            const line = lines[idx];
+
+            // Skip an optional header row.
+            if (idx === 0 && /^name\s*,\s*itemkey\s*,\s*x\s*,\s*y\s*,\s*z/i.test(line)) continue;
+
+            const parts = line.split(',').map(p => p.trim());
+            if (parts.length < 5) { skipped++; continue; }
+
+            const [name, itemKey, xStr, yStr, zStr, nxStr, nyStr, nzStr] = parts;
+            const x = parseFloat(xStr);
+            const y = parseFloat(yStr);
+            const z = parseFloat(zStr);
+
+            if (!name || !itemKey || isNaN(x) || isNaN(y) || isNaN(z)) {
+                skipped++;
+                continue;
+            }
+
+            let normal = new THREE.Vector3(0, 1, 0);
+            if (parts.length >= 8) {
+                const nx = parseFloat(nxStr);
+                const ny = parseFloat(nyStr);
+                const nz = parseFloat(nzStr);
+                if (!isNaN(nx) && !isNaN(ny) && !isNaN(nz) && (nx !== 0 || ny !== 0 || nz !== 0)) {
+                    normal = new THREE.Vector3(nx, ny, nz);
+                }
+            }
+
+            create3DSensorNode(new THREE.Vector3(x, y, z), normal, name, itemKey);
+            sensorCount++;
+            added++;
+        }
+
+        updateInventoryTable();
+
+        hintBox.innerHTML = `<i class="fa-solid fa-file-csv"></i> Imported ${added} sensor(s)${skipped > 0 ? `, skipped ${skipped} invalid line(s)` : ''}.`;
+        hintBox.className = 'hint highlight';
+        setTimeout(resetHint, 4000);
+
+        event.target.value = ''; // allow re-selecting the same file later
+    }
+
+    document.getElementById('csvSensorFileInput').addEventListener('change', importSensorsFromCSV3D);
+
+    // DYNAMIC MATERIAL SENSOR COLORIZER
+    function setSensorColor(sensorObject, colorHex, statusStyleClass) {
+        sensorObject.traverse((child) => {
+            if (child.isMesh && child.material) {
+                child.material = child.material.clone();
+                child.material.color.setHex(colorHex);
+
+                if (colorHex === SENSOR_COLORS.HIGH_ALARM) {
+                    child.material.emissive.setHex(SENSOR_COLORS.HIGH_ALARM);
+                    child.material.emissiveIntensity = 0.5;
+                } else if (colorHex === SENSOR_COLORS.SELECTED) {
+                    child.material.emissive.setHex(SENSOR_COLORS.SELECTED);
+                    child.material.emissiveIntensity = 0.4;
+                } else {
+                    child.material.emissive.setHex(0x000000);
+                    child.material.emissiveIntensity = 0;
+                }
+            }
+        });
+
+        if (sensorObject.userData.labelElement && statusStyleClass) {
+            sensorObject.userData.labelElement.className = `sensor-label ${statusStyleClass}`;
+        }
+    }
+
+    function updateLabels() {
+        const tempV = new THREE.Vector3();
+        clickableSensors.forEach(sensor => {
+            if (sensor.userData.labelElement) {
+                sensor.getWorldPosition(tempV);
+                tempV.y += 0.25;
+                tempV.project(camera);
+
+                const x = (tempV.x *  .5 + .5) * window.innerWidth;
+                const y = (tempV.y * -.5 + .5) * window.innerHeight;
+
+                sensor.userData.labelElement.style.transform = `translate(-50%, -100%) translate(${x}px,${y}px)`;
+                sensor.userData.labelElement.style.opacity = (tempV.z > 1) ? 0 : 1;
+            }
+        });
+    }
+
+    function updateSensorCount() {
+        document.getElementById('statSensorCount').innerText = clickableSensors.length;
+        const el2 = document.getElementById('statSensorCount2');
+        if (el2) el2.innerText = clickableSensors.length;
+    }
+
+    function escapeHtml(str) {
+        const div = document.createElement('div');
+        div.innerText = String(str == null ? '' : str);
+        return div.innerHTML;
+    }
+
+    const STATUS_DOT_COLORS = {
+        normal: '#00f5a0',
+        warning: '#ffaa00',
+        alarm: '#ff0055',
+        disconnected: '#94a3b8',
+        selected: '#00f2fe',
+        DISCONNECTED: '#94a3b8'
+    };
+
+    const STATUS_LABELS = {
+        normal: 'Normal',
+        warning: 'Warning',
+        alarm: 'Alarm',
+        disconnected: 'Disconnected',
+        selected: 'Selected',
+        DISCONNECTED: 'Disconnected'
+    };
+
+    // SENSOR INVENTORY TABLE (bottom-left drawer): mirrors the live sensor
+    // list, including position, so it stays in sync with placements made
+    // manually, via CSV import, or removed via delete mode.
+    function updateInventoryTable() {
+        const tbody = document.getElementById('inventoryTableBody');
+        if (!tbody) return;
+
+        if (clickableSensors.length === 0) {
+            tbody.innerHTML = '<tr class="inv-empty-row"><td colspan="7">No sensors placed yet</td></tr>';
+            return;
+        }
+
+        const rows = clickableSensors.map(sensor => {
+            const status = sensor.userData.currentStatus || 'disconnected';
+            const dotColor = STATUS_DOT_COLORS[status] || STATUS_DOT_COLORS.disconnected;
+            const label = STATUS_LABELS[status] || 'Disconnected';
+            const uid = sensor.userData.uid;
+
+            return `<tr data-uid="${escapeHtml(uid)}">
+                <td>${escapeHtml(sensor.userData.name)}</td>
+                <td>${escapeHtml(sensor.userData.itemKey)}</td>
+                <td>${sensor.position.x.toFixed(2)}</td>
+                <td>${sensor.position.y.toFixed(2)}</td>
+                <td>${sensor.position.z.toFixed(2)}</td>
+                <td><span class="inv-status-dot" style="background:${dotColor}"></span>${label}</td>
+                <td><button class="inv-del-btn" data-uid="${escapeHtml(uid)}" title="Remove sensor">✕</button></td>
+            </tr>`;
+        });
+
+        tbody.innerHTML = rows.join('');
+    }
+
+    // Delegate delete-button clicks inside the inventory table to the
+    // existing delete-confirmation flow.
+    document.getElementById('inventoryTableBody').addEventListener('click', (event) => {
+        const btn = event.target.closest('.inv-del-btn');
+        if (!btn) return;
+        const uid = btn.getAttribute('data-uid');
+        const sensor = clickableSensors.find(s => s.userData.uid === uid);
+        if (sensor) promptDeleteSensor(sensor);
+    });
+
+    // --- INVENTORY DRAWER TOGGLE ---
+    function toggleInventoryPanel() {
+        const panel = document.getElementById('inventoryPanel');
+        panel.classList.toggle('collapsed');
+
+        const icon = document.getElementById('inventoryToggleIcon');
+        if (icon) {
+            icon.classList.toggle('fa-chevron-right', panel.classList.contains('collapsed'));
+            icon.classList.toggle('fa-chevron-left', !panel.classList.contains('collapsed'));
+        }
+    }
+
+    // CONTROLS & EVENT HANDLERS
+    const toggleAddBtn = document.getElementById('togglePlaceBtn');
+    const toggleDeleteBtn = document.getElementById('toggleDeleteBtn');
+    const hintBox = document.getElementById('hintBox');
+
+    toggleAddBtn.addEventListener('click', () => {
+        if (isDeleteMode) disableDeleteMode();
+        isPlacementMode = !isPlacementMode;
+        
+        if (isPlacementMode) {
+            toggleAddBtn.classList.add('active');
+            toggleAddBtn.innerHTML = '<i class="fa-solid fa-xmark"></i> Cancel';
+            container.classList.add('placement-mode');
+            hintBox.innerHTML = '<i class="fa-solid fa-crosshairs"></i> CLICK ANY MODEL SURFACE TO ATTACH SENSOR';
+            hintBox.className = 'hint highlight';
+        } else {
+            disablePlacementMode();
+        }
+    });
+
+    toggleDeleteBtn.addEventListener('click', () => {
+        if (isPlacementMode) disablePlacementMode();
+        isDeleteMode = !isDeleteMode;
+
+        if (isDeleteMode) {
+            toggleDeleteBtn.classList.add('active');
+            toggleDeleteBtn.innerHTML = '<i class="fa-solid fa-xmark"></i> Cancel';
+            container.classList.add('delete-mode');
+            hintBox.innerHTML = '<i class="fa-solid fa-trash"></i> CLICK ANY SENSOR MODEL TO DELETE IT';
+            hintBox.className = 'hint delete-highlight';
+        } else {
+            disableDeleteMode();
+        }
+    });
+
+    function disablePlacementMode() {
+        isPlacementMode = false;
+        toggleAddBtn.classList.remove('active');
+        toggleAddBtn.innerHTML = '<i class="fa-solid fa-plus"></i> Add Sensor';
+        container.classList.remove('placement-mode');
+        resetHint();
+    }
+
+    function disableDeleteMode() {
+        isDeleteMode = false;
+        toggleDeleteBtn.classList.remove('active');
+        toggleDeleteBtn.innerHTML = '<i class="fa-solid fa-trash"></i> Delete';
+        container.classList.remove('delete-mode');
+        resetHint();
+    }
+
+    function resetHint() {
+        hintBox.innerHTML = '<i class="fa-solid fa-rotate"></i> Auto-rotating | Drag left/right to spin | Click sensor to inspect';
+        hintBox.className = 'hint';
+    }
+
+    // RAYCASTING
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+
+    window.addEventListener('click', onPointerClick);
+
+    function onPointerClick(event) {
+        if (event.target.closest('#sidebar') || event.target.closest('.modal')) return;
+
+        mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+        mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+        raycaster.setFromCamera(mouse, camera);
+
+        if (isPlacementMode) {
+            const intersects = raycaster.intersectObjects(roomSurfaces, true);
+            if (intersects.length > 0) {
+                const hit = intersects[0];
+                const point = hit.point;
+                
+                const normalMatrix = new THREE.Matrix3().getNormalMatrix(hit.object.matrixWorld);
+                const worldNormal = hit.face.normal.clone().applyMatrix3(normalMatrix).normalize();
+
+                const title = document.getElementById('sensorTitle').value;
+                const key = document.getElementById('itemKey').value;
+
+                create3DSensorNode(point, worldNormal, title, key);
+
+                sensorCount++;
+                document.getElementById('sensorTitle').value = `Server Rack Sensor #${sensorCount}`;
+                disablePlacementMode();
+            }
+            return;
+        }
+
+        if (isDeleteMode) {
+            const intersects = raycaster.intersectObjects(clickableSensors, true);
+            if (intersects.length > 0) {
+                let topObject = intersects[0].object;
+                while (topObject.parent && !clickableSensors.includes(topObject)) {
+                    topObject = topObject.parent;
+                }
+                promptDeleteSensor(topObject);
+            }
+            return;
+        }
+
+        const intersects = raycaster.intersectObjects(clickableSensors, true);
+        if (intersects.length > 0) {
+            let topObject = intersects[0].object;
+            while (topObject.parent && !clickableSensors.includes(topObject)) {
+                topObject = topObject.parent;
+            }
+            openSensorModal(topObject);
+        }
+    }
+
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    function animate() {
+        requestAnimationFrame(animate);
+        controls.update();
+        updateLabels();
+        renderer.render(scene, camera);
+    }
+    animate();
+
+    // DELETION LOGIC
+    function promptDeleteSensor(sensorObj) {
+        sensorToDelete = sensorObj;
+        document.getElementById('confirmDeleteText').innerText = `Are you sure you want to remove "${sensorObj.userData.name}"?`;
+        document.getElementById('confirmDeleteModal').style.display = 'block';
+    }
+
+    function confirmDeleteSensor() {
+        if (sensorToDelete) {
+            if (sensorToDelete === activeModalSensor) {
+                closeModal();
+            }
+            if (sensorToDelete.userData.labelElement) {
+                sensorToDelete.userData.labelElement.remove();
+            }
+            scene.remove(sensorToDelete);
+
+            clickableSensors = clickableSensors.filter(sensor => sensor !== sensorToDelete);
+            sensorToDelete = null;
+            updateSensorCount();
+            updateInventoryTable();
+        }
+        closeConfirmModal();
+        disableDeleteMode();
+    }
+
+    function closeConfirmModal() {
+        document.getElementById('confirmDeleteModal').style.display = 'none';
+        sensorToDelete = null;
+    }
+
+    // ZABBIX API TELEMETRY & COLOR ENGINE
+    async function fetchSensorData(sensorObject) {
+        const itemKey = sensorObject.userData.itemKey;
+
+        try {
+            const response = await fetch(ZABBIX_URL, {
+                method: "POST",
+                headers: { "Content-Type": "application/json-rpc" },
+                body: JSON.stringify({
+                    jsonrpc: "2.0",
+                    method: "item.get",
+                    params: {
+                        output: ["lastvalue", "units"],
+                        filter: { host: HOST_NAME, key_: itemKey }
+                    },
+                    auth: API_TOKEN,
+                    id: 1
+                })
+            });
+
+            const data = await response.json();
+            
+            if (data.result && data.result.length > 0) {
+                const value = parseFloat(data.result[0].lastvalue);
+                const lastValFormatted = value.toFixed(1);
+                const units = data.result[0].units || "°C";
+
+                let calculatedColor = SENSOR_COLORS.NORMAL;
+                let statusBadgeText = "SYSTEM NORMAL";
+                let statusClass = "normal";
+                let badgeStyleClass = "status-ok";
+
+                // Threshold Evaluator Logic
+                if (value >= 35.0) {
+                    // High Alarm / Error -> RED
+                    calculatedColor = SENSOR_COLORS.HIGH_ALARM;
+                    statusBadgeText = "HIGH TEMP ALARM";
+                    statusClass = "alarm";
+                    badgeStyleClass = "status-alarm";
+                } else if (value >= 28.0 && value < 35.0) {
+                    // Almost High / Warning -> YELLOW
+                    calculatedColor = SENSOR_COLORS.WARNING;
+                    statusBadgeText = "WARNING: HIGH TEMP";
+                    statusClass = "warning";
+                    badgeStyleClass = "status-warning";
+                } else {
+                    // Normal Status -> GREEN
+                    calculatedColor = SENSOR_COLORS.NORMAL;
+                    statusBadgeText = "SYSTEM NORMAL";
+                    statusClass = "normal";
+                    badgeStyleClass = "status-ok";
+                }
+
+                sensorObject.userData.currentStatus = statusClass;
+
+                // Only apply non-selection color if sensor isn't currently clicked/blue
+                if (sensorObject !== activeModalSensor) {
+                    setSensorColor(sensorObject, calculatedColor, statusClass);
+                }
+
+                // If modal is active for this sensor, update values & badges
+                if (activeModalSensor === sensorObject) {
+                    const tempEl = document.getElementById("tempValue");
+                    const statusBadge = document.getElementById("statusBadge");
+
+                    tempEl.innerText = `${lastValFormatted} ${units}`;
+                    tempEl.style.color = (statusClass === 'alarm') ? '#ff0055' : ((statusClass === 'warning') ? '#ffaa00' : '#00f5a0');
+
+                    statusBadge.innerText = statusBadgeText;
+                    statusBadge.className = `status-badge ${badgeStyleClass}`;
+                }
+
+                updateInventoryTable();
+            } else {
+                markSensorDisconnected(sensorObject);
+            }
+        } catch (err) {
+            console.error("Zabbix API Error:", err);
+            markSensorDisconnected(sensorObject);
+        }
+    }
+
+    function markSensorDisconnected(sensorObject) {
+        sensorObject.userData.currentStatus = 'disconnected';
+        if (sensorObject !== activeModalSensor) {
+            setSensorColor(sensorObject, SENSOR_COLORS.DISCONNECTED, 'disconnected');
+        }
+
+        if (activeModalSensor === sensorObject) {
+            const tempEl = document.getElementById("tempValue");
+            const statusBadge = document.getElementById("statusBadge");
+
+            tempEl.innerText = "N/A";
+            tempEl.style.color = "#94a3b8";
+
+            statusBadge.innerText = "DISCONNECTED";
+            statusBadge.className = "status-badge status-disconnected";
+        }
+
+        updateInventoryTable();
+    }
+
+    // Global Background Telemetry Poller
+    function pollAllSensors() {
+        clickableSensors.forEach(sensor => {
+            fetchSensorData(sensor);
+        });
+    }
+
+    // Poll Zabbix every 5 seconds globally
+    setInterval(pollAllSensors, 5000);
+
+    function openSensorModal(sensorObject) {
+        // Revert previous selected sensor color state
+        if (activeModalSensor && activeModalSensor !== sensorObject) {
+            fetchSensorData(activeModalSensor);
+        }
+
+        activeModalSensor = sensorObject;
+        
+        // Highlight active sensor with Blue
+        setSensorColor(sensorObject, SENSOR_COLORS.SELECTED, 'selected');
+
+        document.getElementById("sensorName").innerText = sensorObject.userData.name;
+        document.getElementById("sensorModal").style.display = "block";
+        
+        fetchSensorData(sensorObject);
+    }
+
+    function closeModal() {
+        document.getElementById("sensorModal").style.display = "none";
+        
+        // Revert selected sensor color back to telemetry status
+        if (activeModalSensor) {
+            const previousSensor = activeModalSensor;
+            activeModalSensor = null;
+            fetchSensorData(previousSensor);
+        }
+    }
+</script>
+</body>
+</html>
             --panel-border: rgba(98, 114, 164, 0.3);
             --accent-cyan: #00f2fe;
             --accent-purple: #7928ca;
