@@ -1584,9 +1584,28 @@
       const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
 
       const validTypes = Object.keys(SENSOR_ICONS).filter(k => k !== 'base' && k !== 'stem');
+
+      // Common misspellings / shorthands people type in CSVs, mapped to the
+      // canonical type name. Matching is case-insensitive.
+      const TYPE_ALIASES = {
+        temprature: 'temperature',
+        temprator: 'temperature',
+        tempreture: 'temperature',
+        tempature: 'temperature',
+        temp: 'temperature',
+        humidty: 'humidity',
+        humidiy: 'humidity',
+        humid: 'humidity',
+        volt: 'voltage',
+        voltag: 'voltage',
+        voltz: 'voltage'
+      };
+
       let added = 0;
       let skipped = 0;
+      let corrected = 0;
       let roomsCreated = 0;
+      const unrecognizedTypes = new Set();
       const currentFloor = projectData.currentFloor || 1;
       const touchedOtherFloors = new Set();
 
@@ -1626,7 +1645,20 @@
         const x = parseFloat(xStr);
         const y = parseFloat(yStr);
 
+        // Normalize the type: lowercase it, then fix up common typos before
+        // validating, so a stray misspelling doesn't silently drop the row.
+        if (type) {
+          const normalized = type.toLowerCase();
+          if (!validTypes.includes(normalized) && TYPE_ALIASES[normalized]) {
+            type = TYPE_ALIASES[normalized];
+            corrected++;
+          } else {
+            type = normalized;
+          }
+        }
+
         if (!room || !validTypes.includes(type) || isNaN(x) || isNaN(y) || isNaN(floorNum) || floorNum < 1) {
+          if (type && !validTypes.includes(type)) unrecognizedTypes.add(type);
           skipped++;
           continue;
         }
@@ -1643,7 +1675,12 @@
             };
             roomsCreated++;
           }
-          const sensor = createSensor(x, y, type, room);
+          // x,y from the CSV are a position *within* the room (e.g. "90,80"
+          // for a 100x80 room), not an absolute canvas position - otherwise
+          // every sensor sharing the same x,y would land on the exact same
+          // spot regardless of which room got auto-placed where.
+          const roomOrigin = mapRooms[room].coords[0];
+          const sensor = createSensor(roomOrigin[0] + x, roomOrigin[1] + y, type, room);
           sensorLayer.add(sensor);
           await registerSensorInZabbix(sensor);
           added++;
@@ -1660,10 +1697,13 @@
             };
             roomsCreated++;
           }
+          const roomOrigin = floorData.rooms[room].coords[0];
+          const absX = roomOrigin[0] + x;
+          const absY = roomOrigin[1] + y;
           const sensorId = 'sensor_' + Math.floor(Math.random() * 9000 + 1000);
           const result = await registerSensorInZabbixRaw(room, type, sensorId);
           floorData.sensors.push({
-            id: sensorId, x, y, type, room,
+            id: sensorId, x: absX, y: absY, type, room,
             zabbixItemId: result.success ? result.itemId : null,
             zabbixHostName: result.success ? result.hostName : null
           });
@@ -1681,8 +1721,12 @@
       const floorNote = touchedOtherFloors.size > 0
         ? ` across ${touchedOtherFloors.size + 1} floor(s)`
         : '';
+      const skippedNote = skipped > 0
+        ? `, skipped ${skipped} invalid line(s)${unrecognizedTypes.size > 0 ? ` (unrecognized type: ${[...unrecognizedTypes].join(', ')})` : ''}`
+        : '';
+      const correctedNote = corrected > 0 ? `, auto-corrected ${corrected} type(s)` : '';
       updateStatus(skipped === 0 ? 'valid' : 'error',
-        `Imported ${added} sensor(s)${floorNote}${roomsCreated > 0 ? ` (created ${roomsCreated} new room(s))` : ''}${skipped > 0 ? `, skipped ${skipped} invalid line(s)` : ''}.`);
+        `Imported ${added} sensor(s)${floorNote}${roomsCreated > 0 ? ` (created ${roomsCreated} new room(s))` : ''}${correctedNote}${skippedNote}.`);
 
       event.target.value = ''; // allow re-selecting the same file later
     }
