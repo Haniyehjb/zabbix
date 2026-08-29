@@ -1564,6 +1564,34 @@
       return { x: centerX - w / 2, y: centerY - h / 2 };
     }
 
+    // Ensures `room` exists in `roomsObj` at a non-overlapping position.
+    // Unlike a plain "create if missing" check, this also fixes rooms that
+    // already exist but currently overlap another room (e.g. left over from
+    // an earlier broken import) - it isn't enough to only place *new*
+    // rooms correctly, since re-importing a CSV must never leave stale,
+    // stacked rooms in place.
+    function resolveRoomPosition(room, x, y, w, h, roomsObj) {
+      const others = {};
+      Object.keys(roomsObj).forEach(name => {
+        if (name !== room) others[name] = roomsObj[name];
+      });
+
+      if (roomsObj[room]) {
+        const bounds = getRectBounds(roomsObj[room].coords);
+        const collides = Object.values(others)
+          .filter(r => r.type === 'room' || r.type === 'corridor')
+          .some(r => rectsOverlap(bounds, getRectBounds(r.coords), 10));
+        if (!collides) return false; // already fine, nothing changed
+      }
+
+      const { x: rx, y: ry } = findFreeRoomSpot(x, y, w, h, others);
+      roomsObj[room] = {
+        coords: [[rx, ry], [rx + w, ry], [rx + w, ry + h], [rx, ry + h], [rx, ry]],
+        type: 'room'
+      };
+      return true; // created or moved
+    }
+
     function ensureFloorExists(floorNum) {
       if (!projectData.floors[floorNum]) {
         projectData.floors[floorNum] = { imageSrc: null, rooms: {}, sensors: [] };
@@ -1666,15 +1694,8 @@
         if (floorNum === currentFloor) {
           // The floor is currently open on screen: use the live canvas
           // objects, exactly like a manual drag-and-drop would.
-          if (!mapRooms[room]) {
-            const w = 100, h = 80;
-            const { x: rx, y: ry } = findFreeRoomSpot(x, y, w, h, mapRooms);
-            mapRooms[room] = {
-              coords: [[rx, ry], [rx + w, ry], [rx + w, ry + h], [rx, ry + h], [rx, ry]],
-              type: 'room'
-            };
-            roomsCreated++;
-          }
+          const w = 100, h = 80;
+          if (resolveRoomPosition(room, x, y, w, h, mapRooms)) roomsCreated++;
           // x,y from the CSV are a position *within* the room (e.g. "90,80"
           // for a 100x80 room), not an absolute canvas position - otherwise
           // every sensor sharing the same x,y would land on the exact same
@@ -1688,15 +1709,8 @@
           // The floor isn't open right now: edit projectData directly, and
           // register the sensor in Zabbix without touching the canvas.
           const floorData = ensureFloorExists(floorNum);
-          if (!floorData.rooms[room]) {
-            const w = 100, h = 80;
-            const { x: rx, y: ry } = findFreeRoomSpot(x, y, w, h, floorData.rooms);
-            floorData.rooms[room] = {
-              coords: [[rx, ry], [rx + w, ry], [rx + w, ry + h], [rx, ry + h], [rx, ry]],
-              type: 'room'
-            };
-            roomsCreated++;
-          }
+          const w = 100, h = 80;
+          if (resolveRoomPosition(room, x, y, w, h, floorData.rooms)) roomsCreated++;
           const roomOrigin = floorData.rooms[room].coords[0];
           const absX = roomOrigin[0] + x;
           const absY = roomOrigin[1] + y;
@@ -1726,7 +1740,7 @@
         : '';
       const correctedNote = corrected > 0 ? `, auto-corrected ${corrected} type(s)` : '';
       updateStatus(skipped === 0 ? 'valid' : 'error',
-        `Imported ${added} sensor(s)${floorNote}${roomsCreated > 0 ? ` (created ${roomsCreated} new room(s))` : ''}${correctedNote}${skippedNote}.`);
+        `Imported ${added} sensor(s)${floorNote}${roomsCreated > 0 ? ` (created/repositioned ${roomsCreated} room(s))` : ''}${correctedNote}${skippedNote}.`);
 
       event.target.value = ''; // allow re-selecting the same file later
     }
